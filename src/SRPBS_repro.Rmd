@@ -492,6 +492,8 @@ print( ggpubr::ggbarplot( ccdf, 'Koo', 'Freq', color='Koo',fill='Koo', palette=b
 
   * association of T1-derived IDPs and rsfMRI IDPs 
 
+  * default parameters for SiMLR (regression and ICA)
+
 * test on each other site 
 
   * just means projecting the IDPs onto the SiMLR bases for both T1 and rsfMRI
@@ -679,7 +681,7 @@ temp2[,cnames]
 )
 ggpubr::ggboxplot(temp, y = "icc", x='method',
    color = "method", # notch=TRUE, # fill = "anat",
-   palette = 'jco', title='ICC variability by method: T1w IDPs' )+ 
+   palette = 'npg', title='ICC variability by method: T1w IDPs' )+ 
   theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust=1))
 
 ```
@@ -713,7 +715,7 @@ temp2[,cnames]
 )
 ggpubr::ggboxplot(temp, y = "icc", x='method',
    color = "method", # notch=TRUE, # fill = "anat",
-   palette = 'jco', title='ICC variability by method: rsfMRI IDPs' )+ 
+   palette = 'npg', title='ICC variability by method: rsfMRI IDPs' )+ 
   theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust=1))
 
 ```
