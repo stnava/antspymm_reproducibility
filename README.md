@@ -28,6 +28,30 @@ Test-retest reliability in structural MRI measurements, particularly in T1-weigh
 
 6. **Clinical and Research Implications**: Reliable MRI measurements are critical for longitudinal studies, clinical trials, and in clinical settings where changes in brain structure are monitored over time.
 
+while T1-weighted MRI is a stable and reliable imaging modality, attention to various factors affecting the test-retest reliability is essential, especially in research and clinical applications where precise measurement of brain structure changes is critical.
+
+Traveling subject studies in MRI quality assessment are a significant and insightful method for evaluating the reliability and consistency of MRI scanners across different sites. These studies involve scanning the same subjects (or phantoms) on multiple MRI scanners, either at the same location or different locations. Here are key aspects and benefits of such studies:
+
+1. **Consistency Across Different Scanners**: These studies help in assessing how consistent the imaging results are when the same subject is scanned on different MRI scanners. This is crucial for multi-site studies where data is pooled from various sources.
+
+2. **Scanner Calibration and Standardization**: Traveling subject studies aid in calibrating scanners and standardizing protocols across sites. This ensures that data collected from different scanners are comparable and can be reliably used in aggregated analyses.
+
+3. **Identifying Scanner-Specific Anomalies**: By scanning the same subject on different machines, any anomalies or biases specific to a particular scanner or site can be identified. This is particularly important in longitudinal studies or clinical trials where imaging data plays a crucial role.
+
+4. **Quality Control**: These studies serve as a quality control measure, ensuring that all scanners involved in a study meet certain predefined standards of image quality and reliability.
+
+5. **Impact on Multi-Site Studies**: For multi-site clinical trials or research studies, traveling subject studies are essential for verifying that data collected from different sites can be integrated without significant biases due to hardware or protocol differences.
+
+6. **Software and Analysis Validation**: Such studies are also used to validate image processing software and analysis pipelines. By analyzing the same dataset across different software platforms (like FreeSurfer or ANTs), researchers can assess the consistency and reliability of these tools.
+
+7. **Phantom vs. Human Subjects**: While phantoms (specially designed objects that mimic human tissue properties) are often used for such studies due to their stability and repeatability, human subjects can provide more realistic assessments of variability in clinical conditions.
+
+8. **Challenges**: These studies can be logistically challenging and expensive, as they require transporting subjects or phantoms to different locations and coordinating scans across multiple sites.
+
+In conclusion, traveling subject studies play a crucial role in the quality assessment and standardization of MRI data, especially in multi-center research and clinical trials. They help ensure that findings and conclusions drawn from MRI data are reliable and not confounded by scanner-specific differences or inconsistencies.
+
 At least one study suggests that correction methods like COMBAT add relatively little  to scientific interpretation [(here)](https://www.frontiersin.org/articles/10.3389/fneur.2022.826564/full) at least in some contexts.
 
-In conclusion, while T1-weighted MRI is a stable and reliable imaging modality, attention to various factors affecting the test-retest reliability is essential, especially in research and clinical applications where precise measurement of brain structure changes is critical.
+
+
+
