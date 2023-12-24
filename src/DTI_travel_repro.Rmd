@@ -267,7 +267,7 @@ library( kableExtra )
 for ( k in 1:nrow(myiccs) ) {
   localicc = myiccs[k,'icc']
   myiccs[k,'Cicchetti']=interpret_icc( localicc, 'Cicchetti')
-  myiccs[k,'Yoo']=interpret_icc( localicc, 'Yoo')
+  myiccs[k,'Koo']=interpret_icc( localicc, 'Koo')
 }
 
 ccdf = data.frame( table( myiccs$Cicchetti )/sum( !is.na(myiccs$icc))  )
@@ -283,16 +283,16 @@ ccdf$Cicchetti = factor( ccdf$Cicchetti, levels = c("Substantial","Moderate","Fa
 print( ggpubr::ggbarplot( ccdf, 'Cicchetti', 'Freq', color='Cicchetti',fill='Cicchetti' )+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))  )
 
 
-ccdf = data.frame( table( myiccs$Yoo )/sum( !is.na(myiccs$icc))  )
-names(ccdf)[1]='Yoo'
+ccdf = data.frame( table( myiccs$Koo )/sum( !is.na(myiccs$icc))  )
+names(ccdf)[1]='Koo'
 ccdf=ccdf[ c( 
   which(ccdf[,1]=='Substantial'),
   which(ccdf[,1]=='Moderate'),
   which(ccdf[,1]=='Fair'),
   which(ccdf[,1]=='Slight')), ]
-ccdf$Yoo = factor( ccdf$Yoo, levels = c("Substantial","Moderate","Fair","Slight"))
-print( ggpubr::ggbarplot( ccdf, 'Yoo', 'Freq', color='Yoo',fill='Yoo' )+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))  )
+ccdf$Koo = factor( ccdf$Koo, levels = c("Substantial","Moderate","Fair","Slight"))
+print( ggpubr::ggbarplot( ccdf, 'Koo', 'Freq', color='Koo',fill='Koo' )+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))  )
 
-# kable_styling( kbl( ccdf , caption='Yoo criterion.') )
+# kable_styling( kbl( ccdf , caption='Koo criterion.') )
 
 ```
