@@ -1,0 +1,298 @@
+---
+title: "DTI traveling subjects reproducibility analysis"
+author: "Brian B. Avants"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_document
+---
+
+```{r global options, include=FALSE}
+library( knitr )
+library( ANTsR )
+library( ggplot2 )
+require( grid )
+require( gridExtra )
+library( tidyr )
+library( ggthemes )
+library( ggthemr )
+library( SimplyAgree )
+library( subtyper )
+theme_set(
+    theme_classic(base_size = 25)
+)
+ggthemr("flat",text_size=20,spacing=1.3)
+update_geom_defaults("point", list(size = 4))
+
+```
+
+> "if not now, when?"
+
+
+see 10.1016/j.jcm.2016.02.012
+
+Cicchetti (1994)[19] gives the following often quoted guidelines for interpretation for kappa or ICC inter-rater agreement measures:
+
+* Less than 0.40—poor.
+* Between 0.40 and 0.59—fair.
+* Between 0.60 and 0.74—good.
+* Between 0.75 and 1.00—excellent.
+
+A different guideline is given by Koo and Li (2016):
+
+* below 0.50: poor
+* between 0.50 and 0.75: moderate
+* between 0.75 and 0.90: good
+* above 0.90: excellent
+
+
+see [this paper on resting state](https://www.sciencedirect.com/science/article/pii/S1053811919307487)
+
+
+```{r readitdti,echo=FALSE}
+library(ANTsR)
+rdir="/Users/stnava/code/antspymm_reproducibility/"
+if ( ! exists("dd") ) {
+  demog = read.csv("data/dti_travel_participants.csv")
+  dd = read.csv('data/dti_travel_antspymm.csv')[,-c(1:2)]
+  names(dd)[3]='Site'
+  dd$participant_id = dd$subjectID
+  dd = merge( dd, demog, by='participant_id')
+  dd$Subject = dd$participant_id
+}
+
+mycc = getNamesFromDataframe( c('mean_fa', 'allosum'), dd )
+dd$outcome = dd[,mycc[1]]
+
+mdlSite = lm( T1Hier_resnetGrade ~ Site  + Subject , data=dd )
+visreg::visreg( mdlSite, 'Site' )
+
+```
+
+Demonstrate effect of subject vs effect of Scanner or Site
+
+```{r plotbysubject,fig.width=16,fig.height=16,eval=TRUE,echo=FALSE,message=FALSE}
+library(GGally)
+mycols = c('age', 'outcome', 'Site' )
+nna = ! is.na( dd$outcome )
+print(
+  ggpairs(data = dd[nna, c('Subject',mycols)] ) )
+#    mapping = ggplot2::aes_string(color = 'Subject'),
+#        columns = mycols,
+#        upper = list(continuous = "cor",
+#                     combo = "box_no_facet",
+#                     discrete = "facetbar",
+#                     na = "na"),
+#        lower = list(continuous = "points",
+#                     combo = "facethist",
+#                     discrete = "facetbar",
+#                     na = "na"),
+#        diag = list(continuous = "densityDiag",
+#                    discrete = "barDiag",
+#                    na = "naDiag"),
+#        xlab = 'X',
+#        ylab = 'Y',
+#    title = 'Exploratory correlations:')
+
+
+```
+
+```{r gg2,fig.width=16,fig.height=5,echo=FALSE}
+# ggthemr_reset()
+ggthemr("fresh",text_size=20,spacing=1.3)
+ggplot(dd, aes(x = Subject, y = outcome, color = Site)) +
+  geom_jitter(width=0.2,height=0.2) + ggtitle("Site")
+
+```
+
+
+What is the variability of the measurement if we control for age alone?
+```{r statsage,fig.width=10,fig.height=4}
+mdl=(lm( outcome ~  age + Subject , data=dd ))
+visreg::visreg( mdl, "Subject", gg=TRUE )
+```
+
+
+What is the reproducibility of the measurement if we control for noise?
+```{r stats2c,fig.width=10,fig.height=4}
+
+mdl=(lm( outcome ~  age + Subject + Site + DTI_dti_tsnr_b0_mean , data=dd ))
+visreg::visreg( mdl, "Subject", gg=TRUE )
+
+# grid.arrange( grobs = visreg::visreg( mdl, gg=TRUE ), ncol=1, main='reproducibility' )
+```
+
+
+
+What is the effect of gray matter resnetGrade?
+```{r stats3,fig.width=10,fig.height=4}
+
+mdl=(lm( outcome ~  age + Subject + Site + T1Hier_resnetGrade , data=dd ))
+visreg::visreg( mdl, 'Site', gg=TRUE )
+```
+
+
+
+What is the effect of age if we control for the best confounds?
+```{r stats3age2,fig.width=10,fig.height=4}
+library(lme4)
+mdl=(lm( outcome ~  age  + DTI_dti_tsnr_b0_mean+ Site + T1Hier_resnetGrade +(Subject), data=dd ))
+# mdl=(lm( outcome ~  age   +(Subject), data=dd ))
+visreg::visreg( mdl, 'age', gg=TRUE, main="FIXME" )
+```
+
+
+What is the reproducibility of the measurement if we control for motion?
+```{r stats2,fig.width=10,fig.height=14,eval=FALSE}
+
+mdl=(lm( outcome ~ Subject + DTI_dti_tsnr_b0_mean + DTI_dti_FD_mean, data=dd ))
+grid.arrange( grobs = visreg::visreg( mdl, 'Subject', gg=TRUE ), ncol=1, main='reproducibility' )
+
+
+```
+
+try mixed models to estimate icc
+
+```{r lme4icc,echo=FALSE,eval=FALSE}
+library(lme4)
+# Assuming you have a data frame 'df' with a measurement variable 'measurement',
+# and a grouping variable 'subject'
+
+# Fit a mixed-effects model (random intercepts model)
+model <- lmer(outcome ~  (1 | Site), data = dd)
+
+# Extract variance components
+var_comp <- VarCorr(model)
+
+# Calculate the ICC
+# Total variance is the sum of subject variance and residual variance
+subject_variance <- var_comp$subject[1]
+residual_variance <- attr(var_comp, "sc")^2
+icc <- subject_variance / (subject_variance + residual_variance)
+
+print(icc)
+```
+
+
+ICC(2,k) (Two-Way Random, Absolute Agreement, Average Measures): This version is used when the raters (or measurement devices) are considered random samples from a larger population of raters and you want to generalize your findings to this broader context. It's appropriate when different imaging sites might use different equipment or personnel, and you wish to assess the reliability of measurements across these variable conditions.
+
+Both of these ICC types use the 'k' form, which means that the reliability is assessed based on the average of multiple measurements (in this case, multiple imaging sessions or sites), which generally provides a more robust and stable estimate of reliability.
+
+
+
+
+Summmary  reliability data by Site
+
+```{r deeeeee,echo=FALSE}
+t1names = c( 
+  getNamesFromDataframe( c("T1Hier_","vol",'dktcortex'), dd ),
+  getNamesFromDataframe( c("T1Hier_","vol",'deep_cit'), dd )
+)
+dtnames = c( 
+  getNamesFromDataframe( c("DTI_mean_fa"), dd ) )
+allnames = unique( c( t1names, dtnames ) )
+dd = mapLRAverageVar( dd, allnames[grep("left",allnames)] )
+allnames = gsub("left","LRAVG",allnames)
+allnames = allnames[ -grep("could",allnames)]
+allnames = allnames[ -grep("_and_",allnames)]
+allnames = allnames[ -grep("unclass",allnames)]
+allnames = allnames[ -grep("backgr",allnames)]
+allnameslen = rep(0,length(allnames))
+for ( k in 1:length(allnames))allnameslen[k]=nchar(allnames[k])
+allnames = allnames[ allnameslen < 50 ]
+allnames = allnames[ -grep("right",allnames)]
+mysam = sample( allnames, 5)
+for ( outcome in mysam ) {
+  print( reli_stats( outcome, item="Site", id="Subject", data=dd ) )
+  print( outcome )
+}
+#######
+```
+
+Site-wise reliability
+
+```{r somesortofcorrplot,fig.width=12,fig.height=12,echo=FALSE,eval=TRUE}
+library(irr)
+myvar='Site'
+uscans=unique(dd[,myvar])
+nVars=length(uscans)
+usubs = unique( dd[,'Subject'] )
+nsubs = length( usubs )
+iccdf = matrix(0,nrow=nsubs,ncol=nVars)
+rownames(iccdf)=usubs
+colnames(iccdf)=uscans
+myiccs = data.frame( )
+allnames=unique(allnames)
+allnames=allnames[grep("DTI",allnames)]
+#####################
+for ( a in allnames ) {
+  dd$outcome = dd[,a]
+  for ( k in usubs) { 
+    for (j in uscans) {
+      iccdf[k,j] = dd$outcome[ dd$Subject == k & dd$Site == j ]
+    }
+  }
+  temp = psych::ICC(iccdf,lmer=FALSE)
+  n = nrow( myiccs) + 1
+  tempicc = as.numeric( temp$results['Average_raters_absolute','ICC'] )
+  if ( tempicc < 0) tempicc=NA
+  myiccs[n,c("anat",'icc')]=c(a,tempicc )
+}
+myiccs$icc = as.numeric( myiccs$icc )
+myiccs = myiccs[ !is.na( myiccs$icc ),]
+mysam = sample( allnames, 8 )
+mysam = myiccs$anat %in% mysam 
+myiccsp = myiccs[mysam,]
+myiccsp$anat = gsub("DTI_mean_fa_","fa_",myiccsp$anat)
+myiccsp$anat = gsub("jhu_icbm_labels_1mm", "",myiccsp$anat)
+myiccsp$anat = gsub("[.]","",myiccsp$anat)
+myiccsp$anat = gsub("T1Hier_","",myiccsp$anat)
+myiccsp$anat = gsub("LRAVG","",myiccsp$anat)
+myiccsp$anat = gsub("__","_",myiccsp$anat)
+myiccsp$icc = as.numeric( myiccsp$icc )
+myiccsp = myiccsp[ order( myiccsp$icc ), ]
+print( myiccsp )
+print( ggpubr::ggbarplot( myiccsp, 'anat', 'icc', color='anat',fill='anat' )+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))  )
+
+
+# mykap = kappam.fleiss( iccdf, detail=TRUE )
+# print( mykap )
+
+```
+
+
+# how many fall in each category 
+
+```{r intepreticc,echo=FALSE,eval=TRUE,results='asis'}
+library( kableExtra )
+
+for ( k in 1:nrow(myiccs) ) {
+  localicc = myiccs[k,'icc']
+  myiccs[k,'Cicchetti']=interpret_icc( localicc, 'Cicchetti')
+  myiccs[k,'Yoo']=interpret_icc( localicc, 'Yoo')
+}
+
+ccdf = data.frame( table( myiccs$Cicchetti )/sum( !is.na(myiccs$icc))  )
+names(ccdf)[1]='Cicchetti'
+ccdf=ccdf[ c( 
+  which(ccdf[,1]=='Substantial'),
+  which(ccdf[,1]=='Moderate'),
+  which(ccdf[,1]=='Fair'),
+  which(ccdf[,1]=='Slight')), ]
+# kable_styling( kbl( ccdf , caption='Cicchetti criterion.') )
+ccdf$Cicchetti = factor( ccdf$Cicchetti, levels = c("Substantial","Moderate","Fair","Slight"))
+
+print( ggpubr::ggbarplot( ccdf, 'Cicchetti', 'Freq', color='Cicchetti',fill='Cicchetti' )+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))  )
+
+
+ccdf = data.frame( table( myiccs$Yoo )/sum( !is.na(myiccs$icc))  )
+names(ccdf)[1]='Yoo'
+ccdf=ccdf[ c( 
+  which(ccdf[,1]=='Substantial'),
+  which(ccdf[,1]=='Moderate'),
+  which(ccdf[,1]=='Fair'),
+  which(ccdf[,1]=='Slight')), ]
+ccdf$Yoo = factor( ccdf$Yoo, levels = c("Substantial","Moderate","Fair","Slight"))
+print( ggpubr::ggbarplot( ccdf, 'Yoo', 'Freq', color='Yoo',fill='Yoo' )+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))  )
+
+# kable_styling( kbl( ccdf , caption='Yoo criterion.') )
+
+```
