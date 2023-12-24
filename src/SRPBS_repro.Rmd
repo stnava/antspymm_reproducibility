@@ -5,6 +5,8 @@ date: "`r Sys.Date()`"
 output: rmarkdown::html_document
 ---
 
+# ROI and tabSIMLR reproducibility in T1w and rsfMRI
+
 ## overview 
 
 * we use the SRPBS Traveling Subject MRI Dataset [(here)](https://www.nature.com/articles/s41597-021-01004-8)

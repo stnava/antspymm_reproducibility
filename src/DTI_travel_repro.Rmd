@@ -5,7 +5,9 @@ date: "`r Sys.Date()`"
 output: rmarkdown::html_document
 ---
 
+# ROI and tabSIMLR reproducibility in T1w and DTI
 
+## overview
 
 * we use data from a traveling subject DTI cohort [(here)](https://doi.org/10.1016/j.mri.2019.02.011)
 
