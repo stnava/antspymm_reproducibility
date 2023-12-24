@@ -28,4 +28,6 @@ Test-retest reliability in structural MRI measurements, particularly in T1-weigh
 
 6. **Clinical and Research Implications**: Reliable MRI measurements are critical for longitudinal studies, clinical trials, and in clinical settings where changes in brain structure are monitored over time.
 
+At least one study suggests that correction methods like COMBAT add relatively little  to scientific interpretation [(here)](https://www.frontiersin.org/articles/10.3389/fneur.2022.826564/full) at least in some contexts.
+
 In conclusion, while T1-weighted MRI is a stable and reliable imaging modality, attention to various factors affecting the test-retest reliability is essential, especially in research and clinical applications where precise measurement of brain structure changes is critical.
