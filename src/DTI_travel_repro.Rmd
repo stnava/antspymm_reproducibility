@@ -5,6 +5,27 @@ date: "`r Sys.Date()`"
 output: rmarkdown::html_document
 ---
 
+
+
+* we use data from a traveling subject DTI cohort [(here)](https://doi.org/10.1016/j.mri.2019.02.011)
+
+  * a traveling cohort : 3 healthy subjects travel to 4 sites to be imaged
+
+  * sites represent variability in both MRI manufacturer and MRI model (high variability)
+
+* this enables us to investigate the reliability of our imaging-derived phenotypes (IDPs)
+
+  * IDPs computed with ANTsPyMM (latest version)
+
+  * we use the intraclass correlation coefficient (ICC) to assess consistency or reproducibility of the quantitative IDPs
+
+* the majority of IDPs show superior reliability 
+
+  * joint reduction of IDPs with SiMLR improves reliability further
+
+
+**ANTsPyMM IDPs derived from the same subjects imaged at different sites with MRI from various manufacturers show overall high reliability.**  This provides empirical evidence that multiple modality MRI may be used to derive quantitative phenotypes on which predictive models may be based.
+
 ```{r global options, include=FALSE}
 library( knitr )
 library( ANTsR )
@@ -22,37 +43,25 @@ theme_set(
 ggthemr("flat",text_size=20,spacing=1.3)
 update_geom_defaults("point", list(size = 4))
 
+
+brewpal = 'Pastel1'
+brewpal = 'Set3'
+icck <- function( indf, outcome  ) {
+#  mick = reli_stats( outcome, item="Site", id="Subject", data=indf )
+  mick = reli_aov( outcome, item="Site", id="Subject", data=indf )
+  # print( paste( outcome, mick$icc[5,'icc'] ) )
+  return(  mick$icc[5,'icc'] )
+}
+
 ```
-
-> "if not now, when?"
-
-
-see 10.1016/j.jcm.2016.02.012
-
-Cicchetti (1994)[19] gives the following often quoted guidelines for interpretation for kappa or ICC inter-rater agreement measures:
-
-* Less than 0.40—poor.
-* Between 0.40 and 0.59—fair.
-* Between 0.60 and 0.74—good.
-* Between 0.75 and 1.00—excellent.
-
-A different guideline is given by Koo and Li (2016):
-
-* below 0.50: poor
-* between 0.50 and 0.75: moderate
-* between 0.75 and 0.90: good
-* above 0.90: excellent
-
-
-see [this paper on resting state](https://www.sciencedirect.com/science/article/pii/S1053811919307487)
 
 
 ```{r readitdti,echo=FALSE}
 library(ANTsR)
 rdir="/Users/stnava/code/antspymm_reproducibility/"
 if ( ! exists("dd") ) {
-  demog = read.csv("data/dti_travel_participants.csv")
-  dd = read.csv('data/dti_travel_antspymm.csv')[,-c(1:2)]
+  demog = read.csv(paste0(rdir,"data/dti_travel_participants.csv"))
+  dd = read.csv(paste0(rdir,'data/dti_travel_antspymm.csv'))[,-c(1:2)]
   names(dd)[3]='Site'
   dd$participant_id = dd$subjectID
   dd = merge( dd, demog, by='participant_id')
@@ -221,7 +230,7 @@ rownames(iccdf)=usubs
 colnames(iccdf)=uscans
 myiccs = data.frame( )
 allnames=unique(allnames)
-allnames=allnames[grep("DTI",allnames)]
+# allnames=allnames[grep("DTI",allnames)]
 #####################
 for ( a in allnames ) {
   dd$outcome = dd[,a]
@@ -261,7 +270,7 @@ print( ggpubr::ggbarplot( myiccsp, 'anat', 'icc', color='anat',fill='anat' )+the
 
 # how many fall in each category 
 
-```{r intepreticc,echo=FALSE,eval=TRUE,results='asis'}
+```{r intepreticc,echo=FALSE,eval=TRUE}
 library( kableExtra )
 
 for ( k in 1:nrow(myiccs) ) {
@@ -296,3 +305,337 @@ print( ggpubr::ggbarplot( ccdf, 'Koo', 'Freq', color='Koo',fill='Koo' )+theme(ax
 # kable_styling( kbl( ccdf , caption='Koo criterion.') )
 
 ```
+
+
+
+
+# this is "the same" as the SRPBS analysis
+
+
+Site-wise reliability
+
+```{r somesortofcorrplot2,fig.width=8,fig.height=8,echo=FALSE,eval=TRUE}
+library(irr)
+myvar='Site'
+uscans = unique(dd[,myvar])
+nVars = length(uscans)
+usubs = sort( unique( dd[,'Subject'] ) )
+nsubs = length( usubs )
+iccdf = matrix(0,nrow=nsubs,ncol=nVars)
+rownames(iccdf)=usubs
+colnames(iccdf)=uscans
+allnames=unique(allnames)
+allnamesu = allnames # [ grep("DTI",allnames)]
+#####################
+ee = dd[  dd$Subject %in% usubs, ]
+myiccs = data.frame( )
+for ( a in allnamesu ) {
+  n = nrow( myiccs) + 1
+  tempicc = icck( ee, a )
+  myiccs[n,c("anat",'icc')]=c(a,tempicc )
+}
+myiccs$icc = as.numeric( myiccs$icc )
+myiccs = myiccs[ !is.na( myiccs$icc ) & myiccs$icc > 0,]
+mysam = sample( allnamesu, 6 )
+mysam = myiccs$anat %in% mysam 
+myiccsp = myiccs[mysam,]
+myiccsp$anat = gsub("DTI_mean_fa_","fa_",myiccsp$anat)
+myiccsp$anat = gsub("jhu_icbm_labels_1mm", "",myiccsp$anat)
+myiccsp$anat = gsub("[.]","",myiccsp$anat)
+myiccsp$anat = gsub("T1Hier_","",myiccsp$anat)
+myiccsp$anat = gsub("LRAVG","",myiccsp$anat)
+myiccsp$anat = gsub("__","_",myiccsp$anat)
+myiccsp$icc = as.numeric( myiccsp$icc )
+myiccsp = myiccsp[ order( myiccsp$icc ), ]
+print( myiccsp )
+print(  ggpubr::ggbarplot( myiccsp, 'anat', 'icc', color='anat',fill='anat', palette=brewpal )+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) )
+
+# mykap = kappam.fleiss( iccdf, detail=TRUE )
+# print( mykap )
+```
+
+
+## how does site impact image quality 
+
+
+* higher scores are better 
+
+* a few sites are lower quality 
+
+* a few subjects exhibit lower quality (consistently)
+
+```{r hqt1,echo=FALSE,fig.width=10,fig.height=5}
+library( emmeans )
+ggpubr::ggboxplot(dd, y = "T1Hier_resnetGrade", x='Site',
+   color = "Site", # fill = "anat",
+   palette = 'Set1', title='Image quality variability by site' )+ 
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+cat(
+  "\n\n\n\n\n\n"
+)
+ggpubr::ggboxplot(dd, y = "T1Hier_resnetGrade", x='Subject',
+   color = "Subject", # fill = "anat",
+   palette = 'Set1', title='Image quality variability by subject' )+ 
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+mdl = lm( T1Hier_resnetGrade ~ Site , dd)
+myem = data.frame( emmeans( mdl, 'Site' ) )
+goodsites = usite = myem$Site[ order( myem$emmean, decreasing=T ) ]
+```
+
+## raw ICC for ROI representation
+
+```{r boxplotroi,fig.width=8,fig.height=4,echo=FALSE,eval=TRUE}
+
+myiccs$icc = as.numeric( myiccs$icc )
+myiccs = myiccs[ myiccs$icc > 0, ]
+myiccs$modality='t1'
+myiccs$modality[ grep("DTI",myiccs$anat)]='DTI'
+ggpubr::ggboxplot(myiccs, y = "icc", x='modality',
+   color = "modality", # fill = "anat",
+   palette = 'Dark2', title='ICC variability by modality for ROI representation' )+ 
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+```
+
+
+# how many ROIs fall in each category of ICC
+
+```{r intepreticc2,echo=FALSE,eval=TRUE,results='asis'}
+library( kableExtra )
+
+for ( k in 1:nrow(myiccs) ) {
+  localicc = myiccs[k,'icc']
+  myiccs[k,'Cicchetti']=interpret_icc( localicc, 'Cicchetti')
+  myiccs[k,'Koo']=interpret_icc( localicc, 'Koo')
+}
+ilevs = c("Substantial","Moderate","Fair","Slight")
+
+ccdf = data.frame( table( myiccs$Cicchetti )/sum( !is.na(myiccs$icc))  )
+names(ccdf)[1]='Cicchetti'
+ccdf=ccdf[ c( 
+  which(ccdf[,1]==ilevs[1]),
+  which(ccdf[,1]==ilevs[2]),
+  which(ccdf[,1]==ilevs[3]),
+  which(ccdf[,1]==ilevs[4])), ]
+# kable_styling( kbl( ccdf , caption='Cicchetti criterion.') )
+ccdf$Cicchetti = factor( ccdf$Cicchetti, levels = ilevs )
+
+print( ggpubr::ggbarplot( ccdf, 'Cicchetti', 'Freq', color='Cicchetti',fill='Cicchetti',palette=brewpal, title='ROI ICC: Cicchetti interpretation' )+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))  )
+
+
+ccdf = data.frame( table( myiccs$Koo )/sum( !is.na(myiccs$icc))  )
+names(ccdf)[1]='Koo'
+ccdf=ccdf[ c( 
+  which(ccdf[,1]==ilevs[1]),
+  which(ccdf[,1]==ilevs[2]),
+  which(ccdf[,1]==ilevs[3]),
+  which(ccdf[,1]==ilevs[4])), ]
+ccdf$Koo = factor( ccdf$Koo, levels = ilevs )
+print( ggpubr::ggbarplot( ccdf, 'Koo', 'Freq', color='Koo',fill='Koo', palette=brewpal, title='ROI ICC: Koo interpretation')+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))  )
+
+```
+
+
+## Do SiMLR-derived IDPs improve reliability?  training testing paradigm across sites
+
+* train simlr on each of top quality sites
+
+  * association of T1-derived IDPs and DTI IDPs 
+
+* test on each other site 
+
+  * just means projecting the IDPs onto the SiMLR bases for both T1 and DTI
+
+* this lets us look at ICC in the simlr space 
+
+  * shows that SiMLR latent space (generally) improves ICC over raw ROI representation
+
+```{r simlrtrtTrain,echo=FALSE}
+myiccsimlr = data.frame()
+rm( initu )
+# for ( siteonwhichtotrain in c(bestsite1,bestsite2,bestsite3,bestsite4) ) {
+for ( siteonwhichtotrain in goodsites ) {
+  print( paste("USE SITE: ", siteonwhichtotrain ))
+  lrt1 = getNamesFromDataframe( c("T1Hier","LRAV"), ee )
+  dtivars = getNamesFromDataframe( c("DTI","LRA"), ee, exclusions='cnx' )
+  sitesel = ee$Site == siteonwhichtotrain
+  m1 = ee[ sitesel , lrt1 ]
+  m2 = ee[ sitesel , dtivars ]
+  matlist = list(t1=scale(m1,T,T),rsf=antsrimpute(scale(m2,T,T)))
+  regs = list() # regularizeSimlr( matlist, fraction=0.1, sigma=c(1.0,1.0) )
+  for ( j in 1:length(matlist))
+    regs[[j]] = diag( ncol( matlist[[j]]) )
+  ###########
+  myjr = TRUE
+  # myjr = F
+  prescaling = c( 'centerAndScale', 'sqrtnp' )
+  optimus = 'lineSearch'
+  maxits = 100
+  ebber = 0.99
+  quantval = 0.5
+  pizzer = c( "positive", "positive" )
+  objectiver = 'cca' ; mixer = 'pca'
+  objectiver = 'regression' ; mixer = 'ica'
+  sparval = c( 0.8, 0.8 ) 
+  ##########
+  nsimlr = 2 # nrow(matlist[[1]]) - 1
+  nsimlr = nrow(matlist[[1]])
+  if ( ! exists( "initu" )  )
+    initu = initializeSimlr(
+                      matlist,
+                      nsimlr,
+                      jointReduction = myjr,
+                      zeroUpper = FALSE,
+                      uAlgorithm = "pca",
+                      addNoise = 0 )
+  simlrX = simlr( matlist, 
+                          regs, 
+                          iterations=maxits, 
+                          verbose=FALSE,
+                          randomSeed = 0,
+                          mixAlg=mixer,
+                          energyType=objectiver,
+                          scale = prescaling,
+                          sparsenessQuantiles=sparval,
+                          positivities = pizzer, expBeta=ebber,
+                          optimizationStyle=optimus,
+                          initialUMatrix=initu )
+  sitetrtsimlr=data.frame()
+  for ( jj in 1:length(usite)) {
+    bestsitex = usite[jj]
+    sitesel = subtyper::fs( ee$Site == bestsitex )
+    lsubs = ee[ sitesel, 'Subject' ]
+    t1 = ee[ sitesel , lrt1 ]
+    rsf = ee[ sitesel , dtivars ]
+    proj1=data.frame(
+          Subject = lsubs,
+          t1=data.matrix(t1) %*% simlrX$v[[1]], 
+          DTI=data.matrix(rsf) %*% simlrX$v[[2]], 
+          Site=rep(bestsitex,nrow(t1)))
+    if ( jj == 1 ) sitetrtsimlr=proj1 else sitetrtsimlr=rbind(sitetrtsimlr,proj1)
+    }
+  ######
+  outcomes = getNamesFromDataframe( 'PC', sitetrtsimlr)
+  for ( outcome in outcomes ) {
+    n = nrow( myiccsimlr) + 1
+    tempicc = icck( sitetrtsimlr, outcome )
+    myiccsimlr[n,c("anat",'icc')]=c(outcome, tempicc )
+    myiccsimlr[n,'Cicchetti']=interpret_icc( tempicc, 'Cicchetti')
+    myiccsimlr[n,'Koo']=interpret_icc( tempicc, 'Koo')
+    myiccsimlr[n,'trainsite']=siteonwhichtotrain
+  }
+  myiccsimlr$icc = as.numeric( myiccsimlr$icc )
+  #############################################
+}
+#################################################
+```
+
+## raw simlr ICC values 
+
+```{r simlriccvalues,echo=FALSE,eval=TRUE,fig.width=8,fig.height=4}
+ss = myiccsimlr$icc >= 0
+myiccsimlr = myiccsimlr[ss,]
+myiccsimlr$icc = as.numeric( myiccsimlr$icc )
+myiccsimlr$modality='t1'
+myiccsimlr$modality[ grep("DTI",myiccsimlr$anat)]='DTI'
+ggpubr::ggboxplot(myiccsimlr, y = "icc", x='modality',
+   color = "modality", # fill = "anat",
+   palette = 'Dark2', title='ICC variability by modality for SiMLR representation' )+ 
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+```
+
+## simlr ICC interpretation 
+
+```{r simlriccinterp,echo=FALSE,eval=TRUE,results='asis'}
+ccdf = data.frame( table( myiccsimlr$Cicchetti )/sum( !is.na(myiccsimlr$icc))  )
+names(ccdf)[1]='Cicchetti'
+ccdf=ccdf[ c( 
+  which(ccdf[,1]==ilevs[1]),
+  which(ccdf[,1]==ilevs[2]),
+  which(ccdf[,1]==ilevs[3]),
+  which(ccdf[,1]==ilevs[4])), ]
+# kable_styling( kbl( ccdf , caption='Cicchetti criterion.') )
+ccdf$Cicchetti = factor( ccdf$Cicchetti, levels = ilevs )
+
+print( ggpubr::ggbarplot( ccdf, 'Cicchetti', 'Freq', color='Cicchetti',fill='Cicchetti',palette=brewpal, title='SiMLR ICC: Cicchetti interpretation' )+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))  )
+
+cat("\n\n\n")
+
+ccdf = data.frame( table( myiccsimlr$Koo )/sum( !is.na(myiccsimlr$icc))  )
+names(ccdf)[1]='Koo'
+ccdf=ccdf[ c( 
+  which(ccdf[,1]==ilevs[1]),
+  which(ccdf[,1]==ilevs[2]),
+  which(ccdf[,1]==ilevs[3]),
+  which(ccdf[,1]==ilevs[4])), ]
+ccdf$Koo = factor( ccdf$Koo, levels = ilevs)
+print( ggpubr::ggbarplot( ccdf, 'Koo', 'Freq', color='Koo',fill='Koo', palette=brewpal, title='SiMLR ICC: Koo interpretation')+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))  )
+```
+
+
+
+## simple t-test between two representations 
+
+```{r tt,echo=FALSE,eval=TRUE}
+t1sel1=myiccs$modality == 't1'
+t1sel2=myiccsimlr$modality == 't1'
+print("T-test of SiMLR vs ROI representation: T1 IDPs")
+print( t.test( myiccsimlr[t1sel2,'icc'], myiccs[t1sel1,'icc'],  paired=FALSE ) )
+
+rssel1=myiccs$modality == 'DTI'
+rssel2=myiccsimlr$modality == 'DTI' # 
+print("T-test of SiMLR vs ROI representation: DTI IDPs")
+print( t.test( myiccsimlr[rssel2,'icc'], myiccs[rssel1,'icc'],  paired=FALSE ) )
+
+```
+
+
+## Summary tabSimlr vs ROIs: ICC IDP reliability in T1w
+
+```{r boxplotttT1,fig.width=8,fig.height=4,echo=FALSE,eval=TRUE}
+
+rssel1=myiccs$modality == 't1'
+rssel2=myiccsimlr$modality == 't1' # 
+temp1 = myiccsimlr[rssel2,]
+temp1$method='tabSiMLR'
+temp2 = myiccs[rssel1,]
+temp2$method='ROI'
+cnames = intersect( colnames(temp1), colnames(temp2))
+temp = rbind( 
+temp1[,cnames],
+temp2[,cnames]
+)
+ggpubr::ggboxplot(temp, y = "icc", x='method',
+   color = "method", # notch=TRUE, # fill = "anat",
+   palette = 'jco', title='ICC variability by method: T1w IDPs' )+ 
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust=1))
+
+```
+
+
+## Summary tabSimlr vs ROIs: ICC IDP reliability in DTI
+
+
+```{r boxplotttdti,fig.width=8,fig.height=4,echo=FALSE,eval=TRUE}
+
+rssel1=myiccs$modality == 'DTI'
+rssel2=myiccsimlr$modality == 'DTI' # 
+temp1 = myiccsimlr[rssel2,]
+temp1$method='tabSiMLR'
+temp2 = myiccs[rssel1,]
+temp2$method='ROI'
+cnames = intersect( colnames(temp1), colnames(temp2))
+temp = rbind( 
+temp1[,cnames],
+temp2[,cnames]
+)
+ggpubr::ggboxplot(temp, y = "icc", x='method',
+   color = "method", # notch=TRUE, # fill = "anat",
+   palette = 'jco', title='ICC variability by method: DTI IDPs' )+ 
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust=1))
+
+```
+
+
