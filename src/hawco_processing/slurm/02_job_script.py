@@ -8,7 +8,7 @@ import glob
 base_directory = "/mnt/cluster/data/Hawco_M3RI_Travel/"
 rootdir = base_directory + "data/M3RITravel/"
 ######################################################
-t1fns = glob.glob( rootdir + "*/*/anat/*T1w.nii.gz" )
+t1fns = glob.glob( rootdir + "*/*/anat/*run-1*T1w.nii.gz" )
 t1fns.sort()
 import sys
 fileindex = 3
@@ -47,9 +47,9 @@ template = ants.image_read("~/.antspymm/PPMI_template0.nii.gz")
 bxt = ants.image_read("~/.antspymm/PPMI_template0_brainmask.nii.gz")
 template = template * bxt
 template = ants.crop_image( template, ants.iMath( bxt, "MD", 12 ) )
-
-anatfn = t1fn + '/anat/' + subject_id + "_T1w.nii.gz"
+#############
 anatfn = t1fn 
+# note: we explicitly only take the first run here
 dtfn = glob.glob( rootdir + subject_id + "/" + subdate + '/dwi/' + '*dwi.nii.gz' )[0] 
 rsfn = glob.glob( rootdir + subject_id + "/" + subdate + '/func/' + '*bold.nii.gz' )[0]
 
@@ -82,7 +82,14 @@ mmrun = antspymm.mm_csv(studycsv2,
                         normalization_template_spacing=[1,1,1],
                         mysep='_')  # should be this
 
-
-
-
-
+print("begin brain age")
+bageout = newoutdir + "M3RITravel" + "/" + subject_id + "/" + subdate +  "/T1w/brain_age.csv"
+import antspynet
+import ants
+img = ants.image_read( t1fn )
+bage=antspynet.brain_age( img )
+page=bage['predicted_age']
+id=subject_id + "_" + subdate
+columns = ["id", "brainage"]
+pagedf = pd.DataFrame( [[id, page]], columns=columns )
+pagedf.to_csv( bageout )
