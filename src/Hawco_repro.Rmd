@@ -274,6 +274,7 @@ t1names = c(
   getNamesFromDataframe( c("T1Hier_",'pons','vol'), dd )
 )
 rsnames = getNamesFromDataframe( c("rsfMRI"), dd, exclusions=c('_alff','_falff','snr','evr','FD','dvars') )
+rsnames = getNamesFromDataframe( c("rsfMRI",'_2_'), dd, exclusions=c('snr','evr','FD','dvars') )
 
 dtnames = c( 
   getNamesFromDataframe( c("DTI_mean_fa"), dd ) )

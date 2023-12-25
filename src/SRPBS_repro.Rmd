@@ -335,8 +335,8 @@ t1names = c(
   getNamesFromDataframe( c("T1Hier_",'midbrain','vol'), dd ),
   getNamesFromDataframe( c("T1Hier_",'pons','vol'), dd )
 )
-rsnames = getNamesFromDataframe( c("rsfMRI"), dd, exclusions=c('_alff','_falff','snr','evr','FD','dvars') )
-# rsnames = getNamesFromDataframe( c("rsfMRI"), dd, exclusions=c('_falff','snr','evr','FD','dvars') )
+rsnames = getNamesFromDataframe( c("rsfMRI"), dd, exclusions=c('_alff','snr','evr','FD','dvars','_falff') )
+rsnames = getNamesFromDataframe( c("rsfMRI",'_2_'), dd, exclusions=c('snr','evr','FD','dvars') )
 allnames = unique( c( t1names, rsnames ) )
 dd = mapLRAverageVar( dd, allnames[grep("left",allnames)] )
 allnames = gsub("left","LRAVG",allnames)

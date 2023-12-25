@@ -1,5 +1,5 @@
 
-icck <- function( indf, outcome, k=3, lmeru=FALSE, agree=FALSE  ) {
+icck <- function( indf, outcome, k=6, lmeru=FALSE, agree=FALSE  ) {
   # see: https://journals.plos.org/plosone/article/file?id=10.1371/journal.pone.0219854&type=printable
   # see: QUANTIFYING TEST-RETEST RELIABILITY USING THE INTRACLASS CORRELATION COEFFICIENT AND THE SEM
   # RANDOM+AvgAgree+1-way
@@ -13,6 +13,7 @@ icck <- function( indf, outcome, k=3, lmeru=FALSE, agree=FALSE  ) {
   # --- mean scores when considering statistical summary data e.g.
   # Purpose of Measurement: If you need to know that different raters or instruments give exactly the same score (e.g., blood pressure readings), use the agreement model. If you’re more interested in whether raters or instruments rank subjects similarly (e.g., ranking of performance), use the average agreement model.
   #
+  # k = 6 for average consistency
   #
   # use agree when dealing with factors
   if ( agree ) {
