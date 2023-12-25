@@ -1,0 +1,692 @@
+---
+title: "Hawco traveling subjects reproducibility analysis"
+author: "Brian B. Avants"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_document
+---
+
+# ROI and tabSIMLR reproducibility in T1w, DTI and rsfMRI
+
+## overview 
+
+* we use the Hawco Traveling Subject MRI Dataset [(described here)](https://www.nature.com/articles/s41597-022-01386-3) and available [here](https://openneuro.org/datasets/ds003011)
+
+  * a traveling cohort : 4 healthy subjects travel to FIXME sites to be imaged
+
+    * "Data are available from four healthy male participants, aged 34 to 59 during study start (aged 38 to 63 at study end). Participants had no history of psychiatric, neurological, or major chronic illness."  Note: true ages are unavailable but were estimated with antspynet.brain_age.
+
+  * 29 subjects/visits have complete data ie all 3 modalities.
+
+  * sites represent variability in both MRI manufacturer and MRI model (high variability) that would exceed standard (within-scanner, within-site) test-retest analysis.
+
+  * these data are also longitudinal with followup 1 to 3 years duration from baseline.
+
+* this enables us to investigate the reliability of our imaging-derived phenotypes (IDPs)
+
+  * IDPs computed with ANTsPyMM (latest version)
+
+  * we use the intraclass correlation coefficient (ICC) to assess consistency or reproducibility of the quantitative IDPs
+
+* the majority of IDPs show superior reliability 
+
+  * joint reduction of IDPs with SiMLR improves reliability further
+
+
+
+**ANTsPyMM IDPs derived from the same subjects imaged at different sites with MRI from various manufacturers show overall high reliability.**  This provides empirical evidence that multiple modality MRI may be used to derive quantitative phenotypes on which predictive models may be based.
+
+## background
+
+### ICC
+
+see this paper [10.1016/j.jcm.2016.02.012](https://pubmed.ncbi.nlm.nih.gov/27330520/) for discussion of ICC
+
+Cicchetti (1994) gives the following often quoted guidelines for interpretation for kappa or ICC inter-rater agreement measures:
+
+* Less than 0.40—poor.
+* Between 0.40 and 0.59—fair.
+* Between 0.60 and 0.74—good.
+* Between 0.75 and 1.00—excellent.
+
+A different guideline is given by Koo and Li (2016):
+
+* below 0.50: poor
+* between 0.50 and 0.75: moderate
+* between 0.75 and 0.90: good
+* above 0.90: excellent
+
+
+```{r global options, include=FALSE}
+library( knitr )
+library( ANTsR )
+library( ggplot2 )
+require( grid )
+require( gridExtra )
+library( tidyr )
+library( ggthemes )
+# library( ggthemr )
+library( SimplyAgree )
+library( subtyper )
+theme_set(
+    theme_minimal(base_size = 25)
+)
+# ggthemr("flat",text_size=20,spacing=1.3)
+update_geom_defaults("point", list(size = 4))
+
+brewpal = 'Pastel1'
+brewpal = 'Set3'
+icck <- function( indf, outcome  ) {
+#  mick = reli_stats( outcome, item="Site", id="Subject", data=indf )
+  mick = reli_aov( outcome, item="Site", id="Subject", data=indf )
+  # print( paste( outcome, mick$icc[5,'icc'] ) )
+  return(  mick$icc[5,'icc'] )
+}
+
+```
+
+### reliability of T1w data
+
+see [this analysis of freesurfer on T1w ](https://onlinelibrary.wiley.com/doi/abs/10.1002/hbm.22856) showing values from 0.81 - 0.88
+
+
+see [this paper on T1w and rsfMRI](https://www.sciencedirect.com/science/article/abs/pii/S1120179722020051)
+
+
+### reliability of fMRI data
+
+see [this paper on resting state](https://www.sciencedirect.com/science/article/pii/S1053811919307487)
+
+also see [this empirical analysis in intra-site data](https://onlinelibrary.wiley.com/doi/abs/10.1002/jmri.26652)
+
+### reliability of DTI data
+
+FIXME
+
+## Analysis
+
+`T1Hier_resnetGrade` is a deep learning based method that accurately predicts image quality in multi-site data.
+
+Values range from 0 ( unusable ) to 3 ( best ) quality.
+
+```{r readitsrpbs,echo=FALSE}
+library(ANTsR)
+rdir="/Users/stnava/code/antspymm_reproducibility/"
+dd = read.csv( paste0( rdir, "/data/m3ri_travel_antspymm.csv" ) )
+# extract information about which year data was collected
+dd$Year = NA
+for ( k in 1:nrow( dd ) ) {
+  dd[k,'Year']=as.numeric(substr(unlist( strsplit( dd[k,'date'],'-'))[2],2,2))
+  dd[k,'Year']=as.numeric(dd[k,'Year'])-1
+}
+# extract information about which Site data was collected
+dd$Site = NA
+for ( k in 1:nrow( dd ) ) {
+  temp = unlist( strsplit( dd[k,'date'],'-'))[2]
+  dd[k,'Site']=substr( temp,3,nchar(temp))
+}
+dd$Subject = dd$subjectID
+
+myoc = 'T1Hier_thk_right_precentraldktcortex'
+myoc = "rsfMRI_DefaultMode_2_DefaultMode"
+dd$outcome = dd[,myoc]
+# quick look at longitudinal distribution
+mdlSite = lm( T1Hier_resnetGrade ~( Site  + Subject ) * Year, data=dd )
+visreg::visreg( mdlSite, 'Year', by='Site' )
+visreg::visreg( mdlSite, 'Year', by='Subject' )
+
+usubs = sort( unique( dd$Subject ) )
+usite = sort( unique( dd$Site ) )
+
+############################################
+dd$age =dd$age_median = NA
+for ( u in usubs ) {
+  for ( yy in 0:4 ) {
+    usel =subtyper::fs( dd$subjectID == u & dd$Year == yy )
+    if ( sum(usel) > 0 ) {
+      dd$age[usel] = mean( dd$T1w_brainage[ usel ], na.rm=T )
+      dd$age_median[usel] = median( dd$T1w_brainage[ usel ], na.rm=T )
+    }
+  }
+}
+dd$age_BL = NA
+for ( u in usubs ) {
+  uselall =subtyper::fs( dd$subjectID == u )
+  miny = min( dd$Year[uselall], na.rm=T )
+  usel =subtyper::fs( dd$subjectID == u & dd$Year == miny )
+  dd$age_BL[uselall] = mean( dd$T1w_brainage[ usel ], na.rm=T )
+  }
+dd$deltaTime = dd$age - dd$age_BL
+############################################
+
+
+```
+
+Demonstrate effect of subject vs effect of Site
+
+```{r plotbysubject,fig.width=16,fig.height=16,eval=TRUE,echo=FALSE,message=FALSE}
+library(GGally)
+mycols = c('Year', 'outcome', 'Site' )
+nna = ! is.na( dd$outcome )
+print(
+  ggpairs(data = dd[nna, c('Subject',mycols)] ) )
+```
+
+```{r gg2,fig.width=16,fig.height=5,echo=FALSE}
+
+ggplot(dd, aes(x = Subject, y = outcome, color = Site)) +
+  geom_jitter(width=0.2,height=0.2) + ggtitle("Site") + 
+    scale_color_brewer(palette = brewpal )
+
+```
+
+
+What is the variability of the measurement if we control for year alone?
+```{r statsage,fig.width=10,fig.height=4}
+mdl=(lm( outcome ~  Year + Subject , data=dd ))
+visreg::visreg( mdl, "Subject", gg=TRUE ) + 
+    scale_color_brewer(palette = brewpal )
+```
+
+
+What is the reproducibility of the measurement if we control for age and scanner?
+```{r stats,fig.width=10,fig.height=4}
+###############################################
+mdl=( lm( outcome ~  age_BL + Subject, data=dd ) )
+visreg::visreg( mdl, "Subject", gg=TRUE ) + 
+    scale_color_brewer(palette = brewpal )
+# grid.arrange( grobs = visreg::visreg( mdl, gg=TRUE ), ncol=1, main='reproducibility' )
+```
+
+What is the reproducibility of the measurement if we control for site?
+```{r stats2c,fig.width=10,fig.height=4}
+
+mdl=(lm( outcome ~  age_BL + Subject + Site  , data=dd ))
+visreg::visreg( mdl, "Subject", gg=TRUE ) + 
+    scale_color_brewer(palette = brewpal )
+
+# grid.arrange( grobs = visreg::visreg( mdl, gg=TRUE ), ncol=1, main='reproducibility' )
+```
+
+
+What is the effect of age if we control for the best confounds?
+```{r stats3age2,fig.width=10,fig.height=4}
+library(lme4)
+mdl=(lm( outcome ~  age_BL + T1Hier_resnetGrade +(Subject), data=dd ))
+# mdl=(lm( outcome ~  age   +(Subject), data=dd ))
+visreg::visreg( mdl, 'age_BL', gg=TRUE, main="t=-7.4 vs t=-5.6" ) + 
+    scale_color_brewer(palette = brewpal )
+```
+
+```{r statsnorun,echo=FALSE,eval=FALSE,fig.width=10,fig.height=4}
+qnms=names(dd)[13:80]
+for ( qnm in qnms ) {
+  mdl=(lm( paste0("outcome ~  age_BL + Subject + ", qnm) , data=dd ))
+  mycoffs=coefficients(summary(mdl))
+  if ( mycoffs[qnm,4] < 0.01 )  {
+    print(mycoffs)
+    print(visreg::visreg( mdl, qnm, gg=TRUE ) + 
+    scale_color_brewer(palette = brewpal ))
+  }
+}
+```
+
+
+What is the reproducibility of the measurement if we control for motion?
+```{r stats2,fig.width=10,fig.height=14}
+
+mdl=(lm( outcome ~  age_BL + Subject + 1 , data=dd ))
+visreg::visreg( mdl, gg=TRUE )
+```
+
+
+ICC(2,k) (Two-Way Random, Absolute Agreement, Average Measures): This version is used when the raters (or measurement devices) are considered random samples from a larger population of raters and you want to generalize your findings to this broader context. It's appropriate when different imaging sites might use different equipment or personnel, and you wish to assess the reliability of measurements across these variable conditions.
+
+Both of these ICC types use the 'k' form, which means that the reliability is assessed based on the average of multiple measurements (in this case, multiple imaging sessions or sites), which generally provides a more robust and stable estimate of reliability.
+
+
+
+Summmary  reliability data by Site
+
+```{r}
+print( reli_stats( "outcome", "Site", "Subject", data=dd ) )
+```
+
+Site-wise reliability: pairwise comparison `r myoc`
+
+* two-way agreement average
+
+```{r,fig.width=12,fig.height=12,echo=FALSE}
+library(irr)
+myvar='Site'
+uscans=unique(dd[,myvar])
+nVars=length(uscans)
+iccdf = matrix(0,nrow=nVars,ncol=nVars)
+uscansNam=uscans
+for ( j in 1:nVars ) {
+  ddscanj = dd[dd[,myvar]==uscans[j],]
+  uscansNam[j]=paste0(uscansNam[j],unique(ddscanj$Scanner))
+}
+rownames(iccdf)=uscansNam
+colnames(iccdf)=uscansNam
+for ( k in 1:nVars) {
+  for (j in 1:nVars) {
+  if ( TRUE) {
+    subsloc =  intersect(
+      dd[dd[,myvar]==uscans[k],"Subject"],
+      dd[dd[,myvar]==uscans[j],"Subject"] )
+    ddscanj = dd[dd[,myvar]==uscans[j] ,]
+    ddscank = dd[dd[,myvar]==uscans[k] ,]
+    sdf=data.frame(
+      V0=ddscank[ ddscank[,"Subject"] %in% subsloc,"outcome"],
+      V1=ddscanj[ ddscanj[,"Subject"] %in% subsloc,"outcome"] )
+    iccSR = irr::icc( sdf[,c("V0","V1")],
+      model = "twoway", type = "agreement", unit = "average" )$value # ,1,5)
+    iccdf[k,j]=iccSR
+    }
+  }}#
+# pheatmap::pheatmap(iccdf,display_numbers=T)
+library(corrplot)
+corrplot.mixed(iccdf,is.corr=F)
+# corrplot::corrplot(iccdf, method = 'shade', order = 'AOE', diag = FALSE)
+library("gplots")
+heatmap.2(iccdf, scale = "none", col = bluered(100),
+          trace = "none", density.info = "none")
+```
+
+
+
+
+
+Summmary  reliability data by Site
+
+```{r setitup,echo=FALSE}
+t1names = c( 
+  getNamesFromDataframe( c("T1Hier_","vol",'dktcortex'), dd ),
+  getNamesFromDataframe( c("T1Hier_","vol",'deep_cit'), dd ),
+  getNamesFromDataframe( c("T1Hier_","thk",'dktcortex'), dd ),
+  getNamesFromDataframe( c("T1Hier_","thk",'deep_cit'), dd ),
+  getNamesFromDataframe( c("T1Hier_",'nbm','vol'), dd ),
+  getNamesFromDataframe( c("T1Hier_",'nbm','thk'), dd ),
+  getNamesFromDataframe( c("T1Hier_",'cerebellum','vol'), dd ),
+  getNamesFromDataframe( c("T1Hier_",'mtl','vol'), dd ),
+  getNamesFromDataframe( c("T1Hier_",'medulla','vol'), dd ),
+  getNamesFromDataframe( c("T1Hier_",'midbrain','vol'), dd ),
+  getNamesFromDataframe( c("T1Hier_",'pons','vol'), dd )
+)
+rsnames = getNamesFromDataframe( c("rsfMRI"), dd, exclusions=c('_alff','_falff','snr','evr','FD','dvars') )
+# rsnames = getNamesFromDataframe( c("rsfMRI"), dd, exclusions=c('_falff','snr','evr','FD','dvars') )
+allnames = unique( c( t1names, rsnames ) )
+dd = mapLRAverageVar( dd, allnames[grep("left",allnames)] )
+allnames = gsub("left","LRAVG",allnames)
+allnames = allnames[ -grep("right",allnames)]
+mysam = sample( allnames, 5)
+for ( outcome in mysam ) {
+  print( reli_stats( outcome, item="Site", id="Subject", data=dd ) )
+  print( outcome )
+}
+#######
+```
+
+Site-wise reliability
+
+```{r somesortofcorrplot,fig.width=8,fig.height=8,echo=FALSE,eval=TRUE}
+library(irr)
+myvar='Site'
+uscans = unique(dd[,myvar])
+nVars = length(uscans)
+usubs = sort( unique( dd[,'Subject'] ) )
+usubs = usubs[1:6]
+nsubs = length( usubs )
+iccdf = matrix(0,nrow=nsubs,ncol=nVars)
+rownames(iccdf)=usubs
+colnames(iccdf)=uscans
+allnames=unique(allnames)
+allnamesu = allnames# [ grep("T1Hier_",allnames)]
+# allnamesu = allnames[ grep("rsfMRI",allnames)]
+#####################
+ee = dd[  dd$Subject %in% usubs, ]
+myiccs = data.frame( )
+for ( a in allnamesu ) {
+  n = nrow( myiccs) + 1
+  tempicc = icck( ee, a )
+  myiccs[n,c("anat",'icc')]=c(a,tempicc )
+}
+myiccs = myiccs[ !is.na( myiccs$icc ),]
+mysam = sample( allnamesu, 6 )
+mysam = myiccs$anat %in% mysam 
+myiccsp = myiccs[mysam,]
+myiccsp$anat = gsub("T1Hier_","",myiccsp$anat)
+myiccsp$anat = gsub("rsfMRI_","",myiccsp$anat)
+myiccsp$anat = gsub("TaskControl","",myiccsp$anat)
+myiccsp$icc = as.numeric( myiccsp$icc )
+myiccsp = myiccsp[ order( myiccsp$icc ), ]
+print( myiccsp )
+print(  ggpubr::ggbarplot( myiccsp, 'anat', 'icc', color='anat',fill='anat', palette=brewpal )+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) )
+
+# mykap = kappam.fleiss( iccdf, detail=TRUE )
+# print( mykap )
+```
+
+
+## how does site impact image quality 
+
+
+* higher scores are better 
+
+* a few sites are lower quality 
+
+* a few subjects exhibit lower quality (consistently)
+
+```{r hqt1,echo=FALSE,fig.width=10,fig.height=5}
+library( emmeans )
+ggpubr::ggboxplot(dd, y = "T1Hier_resnetGrade", x='Site',
+   color = "Site", # fill = "anat",
+   palette = 'Set1', title='Image quality variability by site' )+ 
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+cat(
+  "\n\n\n\n\n\n"
+)
+ggpubr::ggboxplot(dd, y = "T1Hier_resnetGrade", x='Subject',
+   color = "Subject", # fill = "anat",
+   palette = 'Set1', title='Image quality variability by subject' )+ 
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+mdl = lm( T1Hier_resnetGrade ~ Site , dd)
+myem = data.frame( emmeans( mdl, 'Site' ) )
+bestsite = myem$Site[ which.max( myem$emmean ) ]
+bestsite1 = myem$Site[ order( myem$emmean, decreasing=T )[1] ]
+bestsite2 = myem$Site[ order( myem$emmean, decreasing=T )[2] ]
+bestsite3 = myem$Site[ order( myem$emmean, decreasing=T )[3] ]
+bestsite4 = myem$Site[ order( myem$emmean, decreasing=T )[4] ]
+goodsites = myem$Site[ order( myem$emmean, decreasing=T ) ]
+goodsites = head( myem$Site[ order( myem$emmean, decreasing=T ) ], 6 )
+```
+
+## raw ICC for ROI representation
+
+```{r boxplotroi,fig.width=8,fig.height=4,echo=FALSE,eval=TRUE}
+myiccs$icc = as.numeric( myiccs$icc )
+myiccs = myiccs[ myiccs$icc > 0, ]
+myiccs$modality='t1'
+myiccs$modality[ grep("rsf",myiccs$anat)]='rsfMRI'
+ggpubr::ggboxplot(myiccs, y = "icc", x='modality',
+   color = "modality", # fill = "anat",
+   palette = 'Dark2', title='ICC variability by modality for ROI representation' )+ 
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+```
+
+
+# how many ROIs fall in each category of ICC
+
+```{r intepreticc,echo=FALSE,eval=TRUE,results='asis'}
+library( kableExtra )
+
+for ( k in 1:nrow(myiccs) ) {
+  localicc = myiccs[k,'icc']
+  myiccs[k,'Cicchetti']=interpret_icc( localicc, 'Cicchetti')
+  myiccs[k,'Koo']=interpret_icc( localicc, 'Koo')
+}
+ilevs = c("Substantial","Moderate","Fair","Slight")
+
+ccdf = data.frame( table( myiccs$Cicchetti )/sum( !is.na(myiccs$icc))  )
+names(ccdf)[1]='Cicchetti'
+ccdf=ccdf[ c( 
+  which(ccdf[,1]==ilevs[1]),
+  which(ccdf[,1]==ilevs[2]),
+  which(ccdf[,1]==ilevs[3]),
+  which(ccdf[,1]==ilevs[4])), ]
+# kable_styling( kbl( ccdf , caption='Cicchetti criterion.') )
+ccdf$Cicchetti = factor( ccdf$Cicchetti, levels = ilevs )
+
+print( ggpubr::ggbarplot( ccdf, 'Cicchetti', 'Freq', color='Cicchetti',fill='Cicchetti',palette=brewpal, title='ROI ICC: Cicchetti interpretation' )+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))  )
+
+
+ccdf = data.frame( table( myiccs$Koo )/sum( !is.na(myiccs$icc))  )
+names(ccdf)[1]='Koo'
+ccdf=ccdf[ c( 
+  which(ccdf[,1]==ilevs[1]),
+  which(ccdf[,1]==ilevs[2]),
+  which(ccdf[,1]==ilevs[3]),
+  which(ccdf[,1]==ilevs[4])), ]
+ccdf$Koo = factor( ccdf$Koo, levels = ilevs )
+print( ggpubr::ggbarplot( ccdf, 'Koo', 'Freq', color='Koo',fill='Koo', palette=brewpal, title='ROI ICC: Koo interpretation')+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))  )
+
+```
+
+
+## Do SiMLR-derived IDPs improve reliability?  training testing paradigm across sites
+
+* train simlr on each of top quality sites
+
+  * association of T1-derived IDPs and rsfMRI IDPs 
+
+  * default parameters for SiMLR (regression and ICA)
+
+* test on each other site 
+
+  * just means projecting the IDPs onto the SiMLR bases for both T1 and rsfMRI
+
+* this lets us look at ICC in the simlr space 
+
+  * shows that SiMLR latent space (generally) improves ICC over raw ROI representation
+
+```{r simlrtrtTrain,echo=FALSE}
+myiccsimlr = data.frame()
+rm( initu )
+# for ( siteonwhichtotrain in c(bestsite1,bestsite2,bestsite3,bestsite4) ) {
+for ( siteonwhichtotrain in goodsites ) {
+  print( paste("USE SITE: ", siteonwhichtotrain ))
+  lrt1 = getNamesFromDataframe( c("T1Hier","LRAV"), ee )
+  rsfc = getNamesFromDataframe( c("rsfMRI","_2_"), ee )
+  sitesel = ee$Site == siteonwhichtotrain
+  m1 = ee[ sitesel , lrt1 ]
+  m2 = ee[ sitesel , rsfc ]
+  matlist = list(t1=scale(m1,T,T),rsf=antsrimpute(scale(m2,T,T)))
+  regs = list() # regularizeSimlr( matlist, fraction=0.1, sigma=c(1.0,1.0) )
+  for ( j in 1:length(matlist))
+    regs[[j]] = diag( ncol( matlist[[j]]) )
+  ###########
+  myjr = TRUE
+  # myjr = F
+  prescaling = c( 'centerAndScale', 'sqrtnp' )
+  optimus = 'lineSearch'
+  maxits = 100
+  ebber = 0.99
+  quantval = 0.5
+  pizzer = c( "positive", "positive" )
+  objectiver = 'cca' ; mixer = 'pca'
+  objectiver = 'regression' ; mixer = 'ica'
+  sparval = c( 0.8, 0.8 ) 
+  ##########
+  nsimlr = 2 # nrow(matlist[[1]]) - 1
+  nsimlr = nrow(matlist[[1]])
+  if ( ! exists( "initu" )  )
+    initu = initializeSimlr(
+                      matlist,
+                      nsimlr,
+                      jointReduction = myjr,
+                      zeroUpper = FALSE,
+                      uAlgorithm = "pca",
+                      addNoise = 0 )
+  simlrX = simlr( matlist, 
+                          regs, 
+                          iterations=maxits, 
+                          verbose=FALSE,
+                          randomSeed = 0,
+                          mixAlg=mixer,
+                          energyType=objectiver,
+                          scale = prescaling,
+                          sparsenessQuantiles=sparval,
+                          positivities = pizzer, expBeta=ebber,
+                          optimizationStyle=optimus,
+                          initialUMatrix=initu )
+  sitetrtsimlr=data.frame()
+  for ( jj in 1:length(usite)) {
+    bestsitex = usite[jj]
+    sitesel = subtyper::fs( ee$Site == bestsitex )
+    lsubs = ee[ sitesel, 'Subject' ]
+    t1 = ee[ sitesel , lrt1 ]
+    rsf = ee[ sitesel , rsfc ]
+    proj1=data.frame(
+          Subject = lsubs,
+          t1=data.matrix(t1) %*% simlrX$v[[1]], 
+          rsf=data.matrix(rsf) %*% simlrX$v[[2]], 
+          Site=rep(bestsitex,nrow(t1)))
+    if ( jj == 1 ) sitetrtsimlr=proj1 else sitetrtsimlr=rbind(sitetrtsimlr,proj1)
+    }
+  ######
+  outcomes = getNamesFromDataframe( 'PC', sitetrtsimlr)
+  for ( outcome in outcomes ) {
+    n = nrow( myiccsimlr) + 1
+    tempicc = icck( sitetrtsimlr, outcome )
+    myiccsimlr[n,c("anat",'icc')]=c(outcome, tempicc )
+    myiccsimlr[n,'Cicchetti']=interpret_icc( tempicc, 'Cicchetti')
+    myiccsimlr[n,'Koo']=interpret_icc( tempicc, 'Koo')
+    myiccsimlr[n,'trainsite']=siteonwhichtotrain
+  }
+  myiccsimlr$icc = as.numeric( myiccsimlr$icc )
+  #############################################
+}
+#################################################
+```
+
+## raw simlr ICC values 
+
+```{r simlriccvalues,echo=FALSE,eval=TRUE,fig.width=8,fig.height=4}
+ss = myiccsimlr$icc >= 0
+myiccsimlr = myiccsimlr[ss,]
+myiccsimlr$icc = as.numeric( myiccsimlr$icc )
+myiccsimlr$modality='t1'
+myiccsimlr$modality[ grep("rsf",myiccsimlr$anat)]='rsfMRI'
+ggpubr::ggboxplot(myiccsimlr, y = "icc", x='modality',
+   color = "modality", # fill = "anat",
+   palette = 'Dark2', title='ICC variability by modality for SiMLR representation' )+ 
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+
+```
+
+## simlr ICC interpretation 
+
+```{r simlriccinterp,echo=FALSE,eval=TRUE,results='asis'}
+ccdf = data.frame( table( myiccsimlr$Cicchetti )/sum( !is.na(myiccsimlr$icc))  )
+names(ccdf)[1]='Cicchetti'
+ccdf=ccdf[ c( 
+  which(ccdf[,1]==ilevs[1]),
+  which(ccdf[,1]==ilevs[2]),
+  which(ccdf[,1]==ilevs[3]),
+  which(ccdf[,1]==ilevs[4])), ]
+# kable_styling( kbl( ccdf , caption='Cicchetti criterion.') )
+ccdf$Cicchetti = factor( ccdf$Cicchetti, levels = ilevs )
+
+print( ggpubr::ggbarplot( ccdf, 'Cicchetti', 'Freq', color='Cicchetti',fill='Cicchetti',palette=brewpal, title='SiMLR ICC: Cicchetti interpretation' )+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))  )
+
+cat("\n\n\n")
+
+ccdf = data.frame( table( myiccsimlr$Koo )/sum( !is.na(myiccsimlr$icc))  )
+names(ccdf)[1]='Koo'
+ccdf=ccdf[ c( 
+  which(ccdf[,1]==ilevs[1]),
+  which(ccdf[,1]==ilevs[2]),
+  which(ccdf[,1]==ilevs[3]),
+  which(ccdf[,1]==ilevs[4])), ]
+ccdf$Koo = factor( ccdf$Koo, levels = ilevs)
+print( ggpubr::ggbarplot( ccdf, 'Koo', 'Freq', color='Koo',fill='Koo', palette=brewpal, title='SiMLR ICC: Koo interpretation')+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))  )
+```
+
+```{r braindead,eval=FALSE,echo=FALSE}
+voi = getNamesFromDataframe( c("T1Hier_","vol",'temporal','superior','LRAVG'), dd)
+cordf=matrix( nrow=length(usite),ncol=length(usite))
+for ( jj in 1:length(usite)) {
+  v0 = dd[ dd$Site == usite[jj], voi ]
+  for ( kk in 1:length(usite)) {
+    v1 = dd[ dd$Site == usite[kk], voi ]
+    if (length(v1) == length(v0) && jj != kk & length(v1) > 0 ) {
+      iccdf <- data.frame(v0, v1)
+      icc_result0 = psych::ICC(iccdf)
+      icc_result <- icc_result0$result$ICC[1]
+      # print( paste(jj,kk,cor(v0,v1)))
+      cordf[jj,kk]=icc_result
+    }
+  }
+}
+print( mean(cordf,na.rm=T) )
+
+
+```
+
+
+
+## simple t-test between two representations 
+
+```{r tt,echo=FALSE,eval=TRUE}
+t1sel1=myiccs$modality == 't1'
+t1sel2=myiccsimlr$modality == 't1'
+print("T-test of SiMLR vs ROI representation: T1 IDPs")
+print( t.test( myiccsimlr[t1sel2,'icc'], myiccs[t1sel1,'icc'],  paired=FALSE ) )
+
+rssel1=myiccs$modality == 'rsfMRI'
+rssel2=myiccsimlr$modality == 'rsfMRI' # 
+print("T-test of SiMLR vs ROI representation: rsfMRI IDPs")
+print( t.test( myiccsimlr[rssel2,'icc'], myiccs[rssel1,'icc'],  paired=FALSE ) )
+
+```
+
+
+## Summary tabSimlr vs ROIs: ICC IDP reliability in T1w
+
+```{r boxplotttT1,fig.width=8,fig.height=4,echo=FALSE,eval=TRUE}
+
+rssel1=myiccs$modality == 't1'
+rssel2=myiccsimlr$modality == 't1' # 
+temp1 = myiccsimlr[rssel2,]
+temp1$method='tabSiMLR'
+temp2 = myiccs[rssel1,]
+temp2$method='ROI'
+cnames = intersect( colnames(temp1), colnames(temp2))
+temp = rbind( 
+temp1[,cnames],
+temp2[,cnames]
+)
+ggpubr::ggboxplot(temp, y = "icc", x='method',
+   color = "method", # notch=TRUE, # fill = "anat",
+   palette = 'npg', title='ICC variability by method: T1w IDPs' )+ 
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust=1))
+
+```
+
+
+## Summary tabSimlr vs ROIs: ICC IDP reliability in rsfMRI network connectivity
+
+
+* rsfMRI measurements are inter and intra network connectivity between the canonical functional networks 
+
+* default mode 
+
+* salience 
+
+* frontoparietal task control 
+
+* ...
+
+```{r boxplotttrsf,fig.width=8,fig.height=4,echo=FALSE,eval=TRUE}
+
+rssel1=myiccs$modality == 'rsfMRI'
+rssel2=myiccsimlr$modality == 'rsfMRI' # 
+temp1 = myiccsimlr[rssel2,]
+temp1$method='tabSiMLR'
+temp2 = myiccs[rssel1,]
+temp2$method='ROI'
+cnames = intersect( colnames(temp1), colnames(temp2))
+temp = rbind( 
+temp1[,cnames],
+temp2[,cnames]
+)
+ggpubr::ggboxplot(temp, y = "icc", x='method',
+   color = "method", # notch=TRUE, # fill = "anat",
+   palette = 'npg', title='ICC variability by method: rsfMRI IDPs' )+ 
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust=1))
+
+```
+
+
