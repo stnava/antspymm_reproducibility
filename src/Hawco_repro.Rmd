@@ -11,11 +11,11 @@ output: rmarkdown::html_document
 
 * we use the Hawco Traveling Subject MRI Dataset [(described here)](https://www.nature.com/articles/s41597-022-01386-3) and available [here](https://openneuro.org/datasets/ds003011)
 
-  * a traveling cohort : 4 healthy subjects travel to FIXME sites to be imaged
+  * a traveling cohort : 4 healthy subjects travel to 6 sites to be imaged
 
     * "Data are available from four healthy male participants, aged 34 to 59 during study start (aged 38 to 63 at study end). Participants had no history of psychiatric, neurological, or major chronic illness."  Note: true ages are unavailable but were estimated with antspynet.brain_age.
 
-  * 29 subjects/visits have complete data ie all 3 modalities.
+  * 29 subjects/visits have complete data ie all 3 modalities.  We select only the baseline data for each site.
 
   * sites represent variability in both MRI manufacturer and MRI model (high variability) that would exceed standard (within-scanner, within-site) test-retest analysis.
 
@@ -27,10 +27,13 @@ output: rmarkdown::html_document
 
   * we use the intraclass correlation coefficient (ICC) to assess consistency or reproducibility of the quantitative IDPs
 
+  * this analysis focuses on the baseline data ( i.e. we do not investigate the longitudinal effects )
+
+  * site CMP exists only at year 3 and -- as such -- does not contribute to baseline data.
+
 * the majority of IDPs show superior reliability 
 
   * joint reduction of IDPs with SiMLR improves reliability further
-
 
 
 **ANTsPyMM IDPs derived from the same subjects imaged at different sites with MRI from various manufacturers show overall high reliability.**  This provides empirical evidence that multiple modality MRI may be used to derive quantitative phenotypes on which predictive models may be based.
@@ -111,7 +114,8 @@ Values range from 0 ( unusable ) to 3 ( best ) quality.
 ```{r readitsrpbs,echo=FALSE}
 library(ANTsR)
 rdir="/Users/stnava/code/antspymm_reproducibility/"
-dd = read.csv( paste0( rdir, "/data/m3ri_travel_antspymm.csv" ) )
+if ( ! exists("dd") )
+  dd = read.csv( paste0( rdir, "/data/m3ri_travel_antspymm.csv" ) )
 # extract information about which year data was collected
 dd$Year = NA
 for ( k in 1:nrow( dd ) ) {
@@ -148,16 +152,21 @@ for ( u in usubs ) {
     }
   }
 }
-dd$age_BL = NA
+dd$age_BL = NA 
+dd$isBL = FALSE
 for ( u in usubs ) {
   uselall =subtyper::fs( dd$subjectID == u )
   miny = min( dd$Year[uselall], na.rm=T )
   usel =subtyper::fs( dd$subjectID == u & dd$Year == miny )
   dd$age_BL[uselall] = mean( dd$T1w_brainage[ usel ], na.rm=T )
+  dd$isBL[ usel ] = TRUE
   }
+# technically not baseline bc only at year 3
+# dd$isBL[ dd$Site == 'CMP'] = TRUE
 dd$deltaTime = dd$age - dd$age_BL
 ############################################
-
+print( ( table( dd$Site, dd$Year ) ) )
+  
 
 ```
 
@@ -251,51 +260,6 @@ Summmary  reliability data by Site
 print( reli_stats( "outcome", "Site", "Subject", data=dd ) )
 ```
 
-Site-wise reliability: pairwise comparison `r myoc`
-
-* two-way agreement average
-
-```{r,fig.width=12,fig.height=12,echo=FALSE}
-library(irr)
-myvar='Site'
-uscans=unique(dd[,myvar])
-nVars=length(uscans)
-iccdf = matrix(0,nrow=nVars,ncol=nVars)
-uscansNam=uscans
-for ( j in 1:nVars ) {
-  ddscanj = dd[dd[,myvar]==uscans[j],]
-  uscansNam[j]=paste0(uscansNam[j],unique(ddscanj$Scanner))
-}
-rownames(iccdf)=uscansNam
-colnames(iccdf)=uscansNam
-for ( k in 1:nVars) {
-  for (j in 1:nVars) {
-  if ( TRUE) {
-    subsloc =  intersect(
-      dd[dd[,myvar]==uscans[k],"Subject"],
-      dd[dd[,myvar]==uscans[j],"Subject"] )
-    ddscanj = dd[dd[,myvar]==uscans[j] ,]
-    ddscank = dd[dd[,myvar]==uscans[k] ,]
-    sdf=data.frame(
-      V0=ddscank[ ddscank[,"Subject"] %in% subsloc,"outcome"],
-      V1=ddscanj[ ddscanj[,"Subject"] %in% subsloc,"outcome"] )
-    iccSR = irr::icc( sdf[,c("V0","V1")],
-      model = "twoway", type = "agreement", unit = "average" )$value # ,1,5)
-    iccdf[k,j]=iccSR
-    }
-  }}#
-# pheatmap::pheatmap(iccdf,display_numbers=T)
-library(corrplot)
-corrplot.mixed(iccdf,is.corr=F)
-# corrplot::corrplot(iccdf, method = 'shade', order = 'AOE', diag = FALSE)
-library("gplots")
-heatmap.2(iccdf, scale = "none", col = bluered(100),
-          trace = "none", density.info = "none")
-```
-
-
-
-
 
 Summmary  reliability data by Site
 
@@ -314,11 +278,18 @@ t1names = c(
   getNamesFromDataframe( c("T1Hier_",'pons','vol'), dd )
 )
 rsnames = getNamesFromDataframe( c("rsfMRI"), dd, exclusions=c('_alff','_falff','snr','evr','FD','dvars') )
-# rsnames = getNamesFromDataframe( c("rsfMRI"), dd, exclusions=c('_falff','snr','evr','FD','dvars') )
-allnames = unique( c( t1names, rsnames ) )
+
+dtnames = c( 
+  getNamesFromDataframe( c("DTI_mean_fa"), dd ) )
+dtnames = dtnames[ -grep("could",dtnames)]
+dtnames = dtnames[ -grep("_and_",dtnames)]
+dtnames = dtnames[ -grep("unclass",dtnames)]
+dtnames = dtnames[ -grep("backgr",dtnames)]
+
+allnames = unique( c( t1names, dtnames, rsnames ) )
 dd = mapLRAverageVar( dd, allnames[grep("left",allnames)] )
-allnames = gsub("left","LRAVG",allnames)
-allnames = allnames[ -grep("right",allnames)]
+dd = mapLRAverageVar( dd, allnames[grep("_l_",allnames)], '_l_', '_r_' )
+allnames = c( getNamesFromDataframe( "LRAVG", dd ), rsnames )
 mysam = sample( allnames, 5)
 for ( outcome in mysam ) {
   print( reli_stats( outcome, item="Site", id="Subject", data=dd ) )
@@ -331,7 +302,7 @@ Site-wise reliability
 
 ```{r somesortofcorrplot,fig.width=8,fig.height=8,echo=FALSE,eval=TRUE}
 library(irr)
-myvar='Site'
+myvar = 'Site'
 uscans = unique(dd[,myvar])
 nVars = length(uscans)
 usubs = sort( unique( dd[,'Subject'] ) )
@@ -344,14 +315,15 @@ allnames=unique(allnames)
 allnamesu = allnames# [ grep("T1Hier_",allnames)]
 # allnamesu = allnames[ grep("rsfMRI",allnames)]
 #####################
-ee = dd[  dd$Subject %in% usubs, ]
+ee = dd[  subtyper::fs( dd$Subject %in% usubs & dd$isBL == TRUE ), ]
 myiccs = data.frame( )
 for ( a in allnamesu ) {
   n = nrow( myiccs) + 1
   tempicc = icck( ee, a )
   myiccs[n,c("anat",'icc')]=c(a,tempicc )
 }
-myiccs = myiccs[ !is.na( myiccs$icc ),]
+myiccs$icc = as.numeric( myiccs$icc )
+myiccs = myiccs[ !is.na( myiccs$icc ) & myiccs$icc > 0 ,]
 mysam = sample( allnamesu, 6 )
 mysam = myiccs$anat %in% mysam 
 myiccsp = myiccs[mysam,]
@@ -409,6 +381,7 @@ myiccs$icc = as.numeric( myiccs$icc )
 myiccs = myiccs[ myiccs$icc > 0, ]
 myiccs$modality='t1'
 myiccs$modality[ grep("rsf",myiccs$anat)]='rsfMRI'
+myiccs$modality[ grep("DTI",myiccs$anat)]='DTI'
 ggpubr::ggboxplot(myiccs, y = "icc", x='modality',
    color = "modality", # fill = "anat",
    palette = 'Dark2', title='ICC variability by modality for ROI representation' )+ 
@@ -479,74 +452,82 @@ for ( siteonwhichtotrain in goodsites ) {
   print( paste("USE SITE: ", siteonwhichtotrain ))
   lrt1 = getNamesFromDataframe( c("T1Hier","LRAV"), ee )
   rsfc = getNamesFromDataframe( c("rsfMRI","_2_"), ee )
+  dtnm = getNamesFromDataframe( c("DTI","LRAV"), ee )
   sitesel = ee$Site == siteonwhichtotrain
   m1 = ee[ sitesel , lrt1 ]
   m2 = ee[ sitesel , rsfc ]
-  matlist = list(t1=scale(m1,T,T),rsf=antsrimpute(scale(m2,T,T)))
-  regs = list() # regularizeSimlr( matlist, fraction=0.1, sigma=c(1.0,1.0) )
-  for ( j in 1:length(matlist))
-    regs[[j]] = diag( ncol( matlist[[j]]) )
-  ###########
-  myjr = TRUE
-  # myjr = F
-  prescaling = c( 'centerAndScale', 'sqrtnp' )
-  optimus = 'lineSearch'
-  maxits = 100
-  ebber = 0.99
-  quantval = 0.5
-  pizzer = c( "positive", "positive" )
-  objectiver = 'cca' ; mixer = 'pca'
-  objectiver = 'regression' ; mixer = 'ica'
-  sparval = c( 0.8, 0.8 ) 
-  ##########
-  nsimlr = 2 # nrow(matlist[[1]]) - 1
-  nsimlr = nrow(matlist[[1]])
-  if ( ! exists( "initu" )  )
+  m3 = ee[ sitesel , dtnm ]
+  if ( nrow( m1 ) > 1 ) {
+    matlist = list(
+      t1=scale(m1,T,T),
+      rsf=antsrimpute(scale(m2,T,T)),
+      dt=antsrimpute(scale(m3,T,T)))
+    regs = list() # regularizeSimlr( matlist, fraction=0.1, sigma=c(1.0,1.0) )
+    for ( j in 1:length(matlist))
+      regs[[j]] = diag( ncol( matlist[[j]]) )
+    ###########
+    myjr = TRUE
+    prescaling = c( 'centerAndScale', 'sqrtnp' )
+    optimus = 'lineSearch'
+    maxits = 100
+    ebber = 0.99
+    quantval = 0.5
+    nmods = length( matlist )
+    pizzer = rep( "positive", nmods )
+    objectiver = 'cca' ; mixer = 'pca'
+    objectiver = 'regression' ; mixer = 'ica'
+    sparval = rep( 0.8, nmods )
+    ##########
+    nsimlr = 2 # nrow(matlist[[1]]) - 1
+    nsimlr = nrow(matlist[[1]]) - 1
     initu = initializeSimlr(
-                      matlist,
-                      nsimlr,
-                      jointReduction = myjr,
-                      zeroUpper = FALSE,
-                      uAlgorithm = "pca",
-                      addNoise = 0 )
-  simlrX = simlr( matlist, 
-                          regs, 
-                          iterations=maxits, 
-                          verbose=FALSE,
-                          randomSeed = 0,
-                          mixAlg=mixer,
-                          energyType=objectiver,
-                          scale = prescaling,
-                          sparsenessQuantiles=sparval,
-                          positivities = pizzer, expBeta=ebber,
-                          optimizationStyle=optimus,
-                          initialUMatrix=initu )
-  sitetrtsimlr=data.frame()
-  for ( jj in 1:length(usite)) {
-    bestsitex = usite[jj]
-    sitesel = subtyper::fs( ee$Site == bestsitex )
-    lsubs = ee[ sitesel, 'Subject' ]
-    t1 = ee[ sitesel , lrt1 ]
-    rsf = ee[ sitesel , rsfc ]
-    proj1=data.frame(
-          Subject = lsubs,
-          t1=data.matrix(t1) %*% simlrX$v[[1]], 
-          rsf=data.matrix(rsf) %*% simlrX$v[[2]], 
-          Site=rep(bestsitex,nrow(t1)))
-    if ( jj == 1 ) sitetrtsimlr=proj1 else sitetrtsimlr=rbind(sitetrtsimlr,proj1)
+                        matlist,
+                        nsimlr,
+                        jointReduction = myjr,
+                        zeroUpper = FALSE,
+                        uAlgorithm = "pca",
+                        addNoise = 0 )
+    simlrX = simlr( matlist, 
+                            regs, 
+                            iterations=maxits, 
+                            verbose=FALSE,
+                            randomSeed = 0,
+                            mixAlg=mixer,
+                            energyType=objectiver,
+                            scale = prescaling,
+                            sparsenessQuantiles=sparval,
+                            positivities = pizzer, expBeta=ebber,
+                            optimizationStyle=optimus,
+                            initialUMatrix=initu )
+    sitetrtsimlr=data.frame()
+    for ( jj in 1:length(usite)) {
+      bestsitex = usite[jj]
+      sitesel = subtyper::fs( ee$Site == bestsitex )
+      lsubs = ee[ sitesel, 'Subject' ]
+      t1 = ee[ sitesel , lrt1 ]
+      rsf = ee[ sitesel , rsfc ]
+      dt = ee[ sitesel , dtnm ]
+      proj1=data.frame(
+            Subject = lsubs,
+            t1=data.matrix(t1) %*% simlrX$v[[1]], 
+            rsf=data.matrix(rsf) %*% simlrX$v[[2]], 
+            dt=data.matrix(dt) %*% simlrX$v[[3]], 
+            Site=rep(bestsitex,nrow(t1)))
+      if ( jj == 1 ) sitetrtsimlr=proj1 else sitetrtsimlr=rbind(sitetrtsimlr,proj1)
+      }
+    ######
+    outcomes = getNamesFromDataframe( 'PC', sitetrtsimlr)
+    for ( outcome in outcomes ) {
+      n = nrow( myiccsimlr) + 1
+      tempicc = icck( sitetrtsimlr, outcome )
+      myiccsimlr[n,c("anat",'icc')]=c(outcome, tempicc )
+      myiccsimlr[n,'Cicchetti']=interpret_icc( tempicc, 'Cicchetti')
+      myiccsimlr[n,'Koo']=interpret_icc( tempicc, 'Koo')
+      myiccsimlr[n,'trainsite']=siteonwhichtotrain
     }
-  ######
-  outcomes = getNamesFromDataframe( 'PC', sitetrtsimlr)
-  for ( outcome in outcomes ) {
-    n = nrow( myiccsimlr) + 1
-    tempicc = icck( sitetrtsimlr, outcome )
-    myiccsimlr[n,c("anat",'icc')]=c(outcome, tempicc )
-    myiccsimlr[n,'Cicchetti']=interpret_icc( tempicc, 'Cicchetti')
-    myiccsimlr[n,'Koo']=interpret_icc( tempicc, 'Koo')
-    myiccsimlr[n,'trainsite']=siteonwhichtotrain
+    myiccsimlr$icc = as.numeric( myiccsimlr$icc )
+    #############################################
   }
-  myiccsimlr$icc = as.numeric( myiccsimlr$icc )
-  #############################################
 }
 #################################################
 ```
@@ -559,6 +540,7 @@ myiccsimlr = myiccsimlr[ss,]
 myiccsimlr$icc = as.numeric( myiccsimlr$icc )
 myiccsimlr$modality='t1'
 myiccsimlr$modality[ grep("rsf",myiccsimlr$anat)]='rsfMRI'
+myiccsimlr$modality[ grep("dt",myiccsimlr$anat)]='DTI'
 ggpubr::ggboxplot(myiccsimlr, y = "icc", x='modality',
    color = "modality", # fill = "anat",
    palette = 'Dark2', title='ICC variability by modality for SiMLR representation' )+ 
@@ -594,28 +576,6 @@ ccdf$Koo = factor( ccdf$Koo, levels = ilevs)
 print( ggpubr::ggbarplot( ccdf, 'Koo', 'Freq', color='Koo',fill='Koo', palette=brewpal, title='SiMLR ICC: Koo interpretation')+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))  )
 ```
 
-```{r braindead,eval=FALSE,echo=FALSE}
-voi = getNamesFromDataframe( c("T1Hier_","vol",'temporal','superior','LRAVG'), dd)
-cordf=matrix( nrow=length(usite),ncol=length(usite))
-for ( jj in 1:length(usite)) {
-  v0 = dd[ dd$Site == usite[jj], voi ]
-  for ( kk in 1:length(usite)) {
-    v1 = dd[ dd$Site == usite[kk], voi ]
-    if (length(v1) == length(v0) && jj != kk & length(v1) > 0 ) {
-      iccdf <- data.frame(v0, v1)
-      icc_result0 = psych::ICC(iccdf)
-      icc_result <- icc_result0$result$ICC[1]
-      # print( paste(jj,kk,cor(v0,v1)))
-      cordf[jj,kk]=icc_result
-    }
-  }
-}
-print( mean(cordf,na.rm=T) )
-
-
-```
-
-
 
 ## simple t-test between two representations 
 
@@ -628,6 +588,12 @@ print( t.test( myiccsimlr[t1sel2,'icc'], myiccs[t1sel1,'icc'],  paired=FALSE ) )
 rssel1=myiccs$modality == 'rsfMRI'
 rssel2=myiccsimlr$modality == 'rsfMRI' # 
 print("T-test of SiMLR vs ROI representation: rsfMRI IDPs")
+print( t.test( myiccsimlr[rssel2,'icc'], myiccs[rssel1,'icc'],  paired=FALSE ) )
+
+
+rssel1=myiccs$modality == 'DTI'
+rssel2=myiccsimlr$modality == 'DTI' # 
+print("T-test of SiMLR vs ROI representation: DTI IDPs")
 print( t.test( myiccsimlr[rssel2,'icc'], myiccs[rssel1,'icc'],  paired=FALSE ) )
 
 ```
@@ -690,3 +656,27 @@ ggpubr::ggboxplot(temp, y = "icc", x='method',
 ```
 
 
+
+
+
+## Summary tabSimlr vs ROIs: ICC IDP reliability in DTI
+
+```{r boxplotttDTI,fig.width=8,fig.height=4,echo=FALSE,eval=TRUE}
+
+rssel1=myiccs$modality == 'DTI'
+rssel2=myiccsimlr$modality == 'DTI' # 
+temp1 = myiccsimlr[rssel2,]
+temp1$method='tabSiMLR'
+temp2 = myiccs[rssel1,]
+temp2$method='ROI'
+cnames = intersect( colnames(temp1), colnames(temp2))
+temp = rbind( 
+temp1[,cnames],
+temp2[,cnames]
+)
+ggpubr::ggboxplot(temp, y = "icc", x='method',
+   color = "method", # notch=TRUE, # fill = "anat",
+   palette = 'npg', title='ICC variability by method: DTI IDPs' )+ 
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust=1))
+
+```
