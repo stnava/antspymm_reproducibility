@@ -78,12 +78,7 @@ update_geom_defaults("point", list(size = 4))
 
 brewpal = 'Pastel1'
 brewpal = 'Set3'
-icck <- function( indf, outcome  ) {
-#  mick = reli_stats( outcome, item="Site", id="Subject", data=indf )
-  mick = reli_aov( outcome, item="Site", id="Subject", data=indf )
-  # print( paste( outcome, mick$icc[5,'icc'] ) )
-  return(  mick$icc[5,'icc'] )
-}
+source("/Users/stnava/code/antspymm_reproducibility/src/icck.R")
 
 ```
 
@@ -258,6 +253,7 @@ Summmary  reliability data by Site
 
 ```{r}
 print( reli_stats( "outcome", "Site", "Subject", data=dd ) )
+print( reli_aov( "outcome", "Site", "Subject", data=dd ) )
 ```
 
 
@@ -316,6 +312,7 @@ allnamesu = allnames# [ grep("T1Hier_",allnames)]
 # allnamesu = allnames[ grep("rsfMRI",allnames)]
 #####################
 ee = dd[  subtyper::fs( dd$Subject %in% usubs & dd$isBL == TRUE ), ]
+ee = dd
 myiccs = data.frame( )
 for ( a in allnamesu ) {
   n = nrow( myiccs) + 1
@@ -466,7 +463,7 @@ for ( siteonwhichtotrain in goodsites ) {
     regs = list() # regularizeSimlr( matlist, fraction=0.1, sigma=c(1.0,1.0) )
     for ( j in 1:length(matlist))
       regs[[j]] = diag( ncol( matlist[[j]]) )
-    regs = regularizeSimlr( matlist, fraction=0.08, sigma=rep(1.5,nmods) )
+#    regs = regularizeSimlr( matlist, fraction=0.08, sigma=rep(1.5,nmods) )
     ###########
     myjr = TRUE
     prescaling = c( 'centerAndScale', 'sqrtnp' )
@@ -479,8 +476,7 @@ for ( siteonwhichtotrain in goodsites ) {
     objectiver = 'regression' ; mixer = 'ica'
     sparval = rep( 0.8, nmods )
     ##########
-    nsimlr = 2 # nrow(matlist[[1]]) - 1
-    nsimlr = nrow(matlist[[1]]) - 1
+    nsimlr = nrow(matlist[[1]])
     initu = initializeSimlr(
                         matlist,
                         nsimlr,

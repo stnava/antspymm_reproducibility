@@ -44,17 +44,10 @@ theme_set(
 )
 ggthemr("flat",text_size=20,spacing=1.3)
 update_geom_defaults("point", list(size = 4))
-
-
 brewpal = 'Pastel1'
 brewpal = 'Set3'
-icck <- function( indf, outcome  ) {
-#  mick = reli_stats( outcome, item="Site", id="Subject", data=indf )
-  mick = reli_aov( outcome, item="Site", id="Subject", data=indf )
-  # print( paste( outcome, mick$icc[5,'icc'] ) )
-  return(  mick$icc[5,'icc'] )
-}
-
+source("/Users/stnava/code/antspymm_reproducibility/src/icck.R")
+################################################################
 ```
 
 
@@ -467,9 +460,11 @@ for ( siteonwhichtotrain in goodsites ) {
   m1 = ee[ sitesel , lrt1 ]
   m2 = ee[ sitesel , dtivars ]
   matlist = list(t1=scale(m1,T,T),rsf=antsrimpute(scale(m2,T,T)))
+  nmods=length(matlist)
   regs = list() # regularizeSimlr( matlist, fraction=0.1, sigma=c(1.0,1.0) )
   for ( j in 1:length(matlist))
     regs[[j]] = diag( ncol( matlist[[j]]) )
+  regs = regularizeSimlr( matlist, fraction=0.08, sigma=rep(1.5,nmods) )
   ###########
   myjr = TRUE
   # myjr = F

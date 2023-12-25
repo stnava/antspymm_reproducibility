@@ -71,13 +71,7 @@ update_geom_defaults("point", list(size = 4))
 
 brewpal = 'Pastel1'
 brewpal = 'Set3'
-icck <- function( indf, outcome  ) {
-#  mick = reli_stats( outcome, item="Site", id="Subject", data=indf )
-  mick = reli_aov( outcome, item="Site", id="Subject", data=indf )
-  # print( paste( outcome, mick$icc[5,'icc'] ) )
-  return(  mick$icc[5,'icc'] )
-}
-
+source("/Users/stnava/code/antspymm_reproducibility/src/icck.R")
 ```
 
 ### reliability of T1w data
@@ -264,21 +258,25 @@ Both of these ICC types use the 'k' form, which means that the reliability is as
 
 Summmary  reliability data by Scanner
 
-```{r}
-print( reli_stats( "outcome", "Scanner", "Subject", data=dd ) )
+```{r scanner,fig.width=8,fig.height=4}
+myrel = reli_stats( "outcome", "Scanner", "Subject", data=dd )
+print(  myrel)
+plot( myrel )
 ```
 
 Summmary  reliability data by Site
 
-```{r}
-print( reli_stats( "outcome", "Site", "Subject", data=dd ) )
+```{r site,fig.width=8,fig.height=4}
+myrel = reli_stats( "outcome", "Site", "Subject", data=dd )
+print(  myrel)
+plot( myrel )
 ```
 
 Site-wise reliability: pairwise comparison `r myoc`
 
 * two-way agreement average
 
-```{r,fig.width=12,fig.height=12,echo=FALSE}
+```{r pwise,fig.width=12,fig.height=12,echo=FALSE}
 library(irr)
 myvar='Site'
 # myvar='Scanner'
@@ -516,9 +514,11 @@ for ( siteonwhichtotrain in goodsites ) {
   m1 = ee[ sitesel , lrt1 ]
   m2 = ee[ sitesel , rsfc ]
   matlist = list(t1=scale(m1,T,T),rsf=antsrimpute(scale(m2,T,T)))
+  nmods=length(matlist)
   regs = list() # regularizeSimlr( matlist, fraction=0.1, sigma=c(1.0,1.0) )
   for ( j in 1:length(matlist))
     regs[[j]] = diag( ncol( matlist[[j]]) )
+  regs = regularizeSimlr( matlist, fraction=0.08, sigma=rep(1.5,nmods) )
   ###########
   myjr = TRUE
   # myjr = F
@@ -532,7 +532,6 @@ for ( siteonwhichtotrain in goodsites ) {
   objectiver = 'regression' ; mixer = 'ica'
   sparval = c( 0.8, 0.8 ) 
   ##########
-  nsimlr = 2 # nrow(matlist[[1]]) - 1
   nsimlr = nrow(matlist[[1]])
   if ( ! exists( "initu" )  )
     initu = initializeSimlr(
