@@ -462,9 +462,11 @@ for ( siteonwhichtotrain in goodsites ) {
       t1=scale(m1,T,T),
       rsf=antsrimpute(scale(m2,T,T)),
       dt=antsrimpute(scale(m3,T,T)))
+    nmods = length( matlist )
     regs = list() # regularizeSimlr( matlist, fraction=0.1, sigma=c(1.0,1.0) )
     for ( j in 1:length(matlist))
       regs[[j]] = diag( ncol( matlist[[j]]) )
+    regs = regularizeSimlr( matlist, fraction=0.08, sigma=rep(1.5,nmods) )
     ###########
     myjr = TRUE
     prescaling = c( 'centerAndScale', 'sqrtnp' )
@@ -472,7 +474,6 @@ for ( siteonwhichtotrain in goodsites ) {
     maxits = 100
     ebber = 0.99
     quantval = 0.5
-    nmods = length( matlist )
     pizzer = rep( "positive", nmods )
     objectiver = 'cca' ; mixer = 'pca'
     objectiver = 'regression' ; mixer = 'ica'
