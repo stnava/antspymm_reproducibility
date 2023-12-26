@@ -8,12 +8,13 @@
 ## 5 two-way random   Avg. Agreement ICC2k 0.7832  0.60597   0.9030
 ## 6  two-way fixed Avg. Consistency ICC3k 0.9885  0.97926   0.9950
 
-icck <- function( indf, outcome, k=6, lmeru=FALSE, agree=FALSE  ) {
+icck <- function( indf, outcome, k=5, lmeru=FALSE, agree=FALSE  ) {
   # see: https://journals.plos.org/plosone/article/file?id=10.1371/journal.pone.0219854&type=printable
   # see: QUANTIFYING TEST-RETEST RELIABILITY USING THE INTRACLASS CORRELATION COEFFICIENT AND THE SEM
   # RANDOM+AvgAgree+1-way
   # a. 1-way or 2-way model:
-  # --- 1-way b/c not all sites do all subjects
+  # --- 2-way b/c each subject is (mostly) rated by the same raters;
+  # --- this is the point of traveling cohorts
   # b. fixed or random effect model:
   # --- random b/c sites are a random selection of possible models
   # c. include or exclude systematic error in the ICC:
