@@ -216,8 +216,20 @@ visreg::visreg( mdl, 'age_BL', gg=TRUE, main="..." ) +
 ```
 
 
+## ICC2k in traveling cohort assessment of quantitative IDPs 
+
+
 We elect to use ICC(2,k) (Two-Way Random, Absolute Agreement, Average Measures): This version of ICC is used when the measurement devices are considered random samples from a larger population of raters and we prefer findings to generalize. ICC(2,k) is appropriate when assessing the reliability of subject-specific measurements across sites.
 The 'k' form of ICC means that the reliability is based on the average of multiple measurements (in this case, multiple imaging sites), which generally provides a more robust and stable estimate of reliability.
+
+- **Traveling Cohort Nature**: Different subjects are imaged at multiple locations or with various MRI scanners.  These scanners are considered to be randomly selected raters that are representative of a larger sample.  This is further justified by the joining of three different TC datasets.  Thus, we argue that these results about MRI IDP consistency should generalize beyond the specific scanners or locations used in the study.
+
+In this study, the goal is to study the consistency of MRI IDPs across different imaging locations or scanners as processed by ANTsPyMM.
+
+- **Multiple Raters/Instruments**: Each subject's MRI IDPs are derived from multiple MRI scanners which are considered as "raters" in this context.
+- **Representation of Diverse Conditions**: These multiple measurements represent a realistic range of conditions under which MRI IDPs are obtained in practice.
+- **Importance of Averaging**: The reliability of the average of measurements (IDPs from different scanners) is more relevant than individual measurements. This is because IDP interpretations are based on aggregated data from different sources in the context of clinical trials that ultimately using population-level statistical summaries.
+- **Appropriateness of ICC(2,k) Model**: Lastly, ICC(2,k) is suitable for assessing the reliability of traveling cohort averaged measurements, as it considers both between-subject variability and measurement variability across different scanners. In contrast, ICC(1,k) only considers scanners as random effects while ICC(3,k) only considers subjects as random effects. ICC(2,k) considers both scanners and subjects as random effects and as such is most appropriate in this context.
 
 ### Summmary  reliability data by Site
 
@@ -719,3 +731,16 @@ ggpubr::ggboxplot(temp, y = "icc", x='method',
 
 ## Examples of image variability
 
+### T1w 
+
+![Example T1w variability from 3 different cohorts. Consistency in appearance is relatively high and this is reflected in overall superior ICC; we excluded the limited data available from the SIGNA scanners as they are clear outliers in quality.](/Users/stnava/code/antspymm_reproducibility/data/figs/t1_q_diff.jpg)
+
+
+### BOLD rsfMRI
+
+![Example BOLD rsfMRI variability from 3 different cohorts.  Visually apparent differences in the average BOLD image are likely associated with this modality being associated with overall lower ICC in this traveling cohort study.  It is possible that test-retest reliability would be higher than what is shown here.](/Users/stnava/code/antspymm_reproducibility/data/figs/rsf_q_diff.jpg)
+
+
+### FA from DTI
+
+![Example FA from DTI variability from 2 different cohorts.  Consistency in appearance is relatively high and this is reflected in overall superior ICC.](/Users/stnava/code/antspymm_reproducibility/data/figs/fa_q_diff.jpg)
