@@ -7,36 +7,59 @@ output: rmarkdown::html_document
 
 # ROI and tabSIMLR reproducibility in T1w, DTI and rsfMRI
 
-## overview 
+## abstract 
 
-* we use the Hawco Traveling Subject MRI Dataset [(described here)](https://www.nature.com/articles/s41597-022-01386-3) and available [here](https://openneuro.org/datasets/ds003011)
+We perform reproducibility analyses for ANTsPyMM based on traveling subject data.
+
+* SRPBS (T1, rsfMRI): Tanaka Saori, C., et al. "SRPBS Traveling Subject MRI Dataset." (No Title) (2019).
+
+* Tong (T1, DTI): Tong, Qiqi, et al. "Multicenter dataset of multi-shell diffusion MRI in healthy traveling adults with identical settings." Scientific Data 7.1 (2020): 157.
+
+* Hawco (T1, rsfMRI, DTI): Hawco, Colin, et al. "A longitudinal human phantom reliability study of multi-center T1-weighted, DTI, and resting state fMRI data." Psychiatry Research: Neuroimaging 282 (2018): 134-142.
+
+Each dataset is analyzed by distributed computing with ANTsPyMM as in `src/hawco_processing`.
+
+Test-retest reliability assessment of MRI measurement is crucial for ensuring that the observed changes in the brain structure over time are due to actual physiological changes rather than variations in the imaging process itself. Traveling subject studies involve scanning the same subjects on multiple MRI scanners at different locations. These studies help in assessing consistency and/or agreement of image quantification where the only variables are the machines themselves. This is crucial for multi-site studies where data is pooled from various sources.  
+
+In this study, we employ traveling cohort data to assess the agreement of imaging derived phentoypes (IDPs)pooled across multiple sites for the purposes of statistical inference. These data will establish expectations of repeatability for T1w, DTI and rsfMRI as measured by ANTsPyMM processing.  Thus, we use these data to characterize the consistency and reliability of these tools when applied to data that has known systematic biases due to site and scanner differences.  The results confirm that findings and conclusions drawn from ANTsPyMM are reliable and not overwhelmed by scanner-specific differences or inconsistencies.  This knowledge is critical for a foundational framework such as ANTsX upon which scientific studies, machine learning platforms and other methodological comparisons are based.
+
+
+## introduction
+
+we investigate three traveling cohort datasets and ANTsPyMM reproducibility therein.  these cohorts represent variability in both MRI manufacturer and MRI model (high variability) that would exceed standard (within-scanner, within-site) test-retest analysis.  results therefore provide a lower-bound on reliability; i.e. within-site (e.g. longitudinal) studies would be expected to have higher reliability in general.
+
+1. the SRPBS Traveling Subject MRI Dataset [(here)](https://www.nature.com/articles/s41597-021-01004-8)
+
+  * a traveling cohort : 9 healthy subjects travel to 12 sites to be imaged
+
+  * of the 12 sites, 9 have consistently available T1w and rsfMRI in 6 subjects
+
+2. traveling subject DTI cohort [(here)](https://www.nature.com/articles/s41597-020-0493-8)
+
+  * a traveling cohort : 3 healthy subjects travel to 4 sites to be imaged
+
+  * available at figshare in BIDS format [(here)](https://figshare.com/articles/dataset/Multicenter_dataset_of_multishell_diffusion_magnetic_resonance_imaging_in_healthy_traveling_adults_with_identical_setting/8851955).
+
+
+3. Hawco Traveling Subject MRI Dataset [(described here)](https://www.nature.com/articles/s41597-022-01386-3) and available [here](https://openneuro.org/datasets/ds003011)
 
   * a traveling cohort : 4 healthy subjects travel to 6 sites to be imaged
 
-    * "Data are available from four healthy male participants, aged 34 to 59 during study start (aged 38 to 63 at study end). Participants had no history of psychiatric, neurological, or major chronic illness."  Note: true ages are unavailable but were estimated with antspynet.brain_age.
+  * "Data are available from four healthy male participants, aged 34 to 59 during study start (aged 38 to 63 at study end). Participants had no history of psychiatric, neurological, or major chronic illness."  Note: true ages are unavailable but were estimated with antspynet.brain_age.
 
   * 29 subjects/visits have complete data ie all 3 modalities.  We select only the baseline data for each site.
 
-  * sites represent variability in both MRI manufacturer and MRI model (high variability) that would exceed standard (within-scanner, within-site) test-retest analysis.
-
   * these data are also longitudinal with followup 1 to 3 years duration from baseline.
 
-* this enables us to investigate the reliability of our imaging-derived phenotypes (IDPs)
-
-  * IDPs computed with ANTsPyMM (latest version)
+These data enable us to investigate the reliability of our imaging-derived phenotypes (IDPs) computed with ANTsPyMM (latest version)
 
   * we use the intraclass correlation coefficient (ICC) to assess consistency or reproducibility of the quantitative IDPs
 
   * this analysis focuses on the baseline data ( i.e. we do not investigate the longitudinal effects )
 
-  * site CMP exists only at year 3 and -- as such -- does not contribute to baseline data.
+  * site CMP in the Hawco cohort exists only at year 3 and -- as such -- does not contribute to baseline data.
 
-* the majority of IDPs show superior reliability 
-
-  * joint reduction of IDPs with SiMLR improves reliability further
-
-
-**ANTsPyMM IDPs derived from the same subjects imaged at different sites with MRI from various manufacturers show overall high reliability.**  This provides empirical evidence that multiple modality MRI may be used to derive quantitative phenotypes on which predictive models may be based.
+We find that (1) the majority of IDPs show superior reliability and (2) joint reduction of IDPs with SiMLR improves reliability further.  **ANTsPyMM IDPs derived from the same subjects imaged at different sites with MRI from various manufacturers show overall high reliability.**  This provides empirical evidence that multiple modality MRI may be used to derive quantitative phenotypes on which predictive models may be based.
 
 ## background
 
@@ -128,16 +151,17 @@ if ( ! exists("dd") ) {
   }
 
 myoc = "rsfMRI_DefaultMode_2_DefaultMode"
-myoc = 'T1Hier_thk_right_precentraldktcortex'
+myoc = 'T1Hier_thk_left_superior_frontaldktcortex'
 dd$outcome = dd[,myoc]
 # quick look at longitudinal distribution
-mdlSite = lm( T1Hier_resnetGrade ~( Site  + Subject ) * Year, data=dd )
-visreg::visreg( mdlSite, 'Year', by='Site' )
-visreg::visreg( mdlSite, 'Year', by='Subject' )
+mdlSite = lm( T1Hier_resnetGrade ~( Site  ) + 1, data=dd )
+visreg::visreg( mdlSite, 'Site', main='Overall image quality by site - aggregated across subjects.')
+mdlSite = lm( T1Hier_resnetGrade ~( Subject ) + 1, data=dd )
+visreg::visreg( mdlSite, 'Subject', main='Overall image quality by subject - aggregated across site.' )
 
 usubs = sort( unique( dd$Subject ) )
 usite = sort( unique( dd$Site ) )
-print( ( table( dd$Site, dd$Subject ) ) )
+print( ( table( dd$Site) ) )
   
 
 ```
@@ -146,7 +170,8 @@ print( ( table( dd$Site, dd$Subject ) ) )
 
 ggplot(dd, aes(x = Subject, y = outcome, color = Site)) +
   geom_jitter(width=0.2,height=0.2) + ggtitle("Site") + 
-    scale_color_brewer(palette = brewpal )
+    scale_color_brewer(palette = brewpal )+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) 
+
 
 ```
 
@@ -155,25 +180,27 @@ What is the variability of the measurement if we control for year alone?
 ```{r statsage,fig.width=10,fig.height=4}
 mdl=(lm( outcome ~  Year + Subject , data=dd ))
 visreg::visreg( mdl, "Subject", gg=TRUE ) + 
-    scale_color_brewer(palette = brewpal )
+    scale_color_brewer(palette = brewpal )+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) 
+
 ```
 
 
 What is the reproducibility of the measurement if we control for age and scanner?
-```{r stats,fig.width=10,fig.height=4}
+```{r stats,fig.width=10,fig.height=5}
 ###############################################
 mdl=( lm( outcome ~  age_BL + Subject, data=dd ) )
 visreg::visreg( mdl, "Subject", gg=TRUE ) + 
-    scale_color_brewer(palette = brewpal )
+    scale_color_brewer(palette = brewpal )+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) 
 # grid.arrange( grobs = visreg::visreg( mdl, gg=TRUE ), ncol=1, main='reproducibility' )
 ```
 
 What is the reproducibility of the measurement if we control for site?
-```{r stats2c,fig.width=10,fig.height=4}
+```{r stats2c,fig.width=10,fig.height=5}
 
 mdl=(lm( outcome ~  age_BL + Subject + Site  , data=dd ))
 visreg::visreg( mdl, "Subject", gg=TRUE ) + 
-    scale_color_brewer(palette = brewpal )
+    scale_color_brewer(palette = brewpal )+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) 
+
 
 # grid.arrange( grobs = visreg::visreg( mdl, gg=TRUE ), ncol=1, main='reproducibility' )
 ```
@@ -184,39 +211,15 @@ What is the effect of age if we control for the best confounds?
 library(lme4)
 mdl=(lm( outcome ~  age_BL + T1Hier_resnetGrade +(Subject), data=dd ))
 # mdl=(lm( outcome ~  age   +(Subject), data=dd ))
-visreg::visreg( mdl, 'age_BL', gg=TRUE, main="t=-7.4 vs t=-5.6" ) + 
+visreg::visreg( mdl, 'age_BL', gg=TRUE, main="..." ) + 
     scale_color_brewer(palette = brewpal )
 ```
 
-```{r statsnorun,echo=FALSE,eval=FALSE,fig.width=10,fig.height=4}
-qnms=names(dd)[13:80]
-for ( qnm in qnms ) {
-  mdl=(lm( paste0("outcome ~  age_BL + Subject + ", qnm) , data=dd ))
-  mycoffs=coefficients(summary(mdl))
-  if ( mycoffs[qnm,4] < 0.01 )  {
-    print(mycoffs)
-    print(visreg::visreg( mdl, qnm, gg=TRUE ) + 
-    scale_color_brewer(palette = brewpal ))
-  }
-}
-```
 
+We elect to use ICC(2,k) (Two-Way Random, Absolute Agreement, Average Measures): This version of ICC is used when the measurement devices are considered random samples from a larger population of raters and we prefer findings to generalize. ICC(2,k) is appropriate when assessing the reliability of subject-specific measurements across sites.
+The 'k' form of ICC means that the reliability is based on the average of multiple measurements (in this case, multiple imaging sites), which generally provides a more robust and stable estimate of reliability.
 
-What is the reproducibility of the measurement if we control for motion?
-```{r stats2,fig.width=10,fig.height=14}
-
-mdl=(lm( outcome ~  age_BL + Subject + 1 , data=dd ))
-visreg::visreg( mdl, gg=TRUE )
-```
-
-
-ICC(2,k) (Two-Way Random, Absolute Agreement, Average Measures): This version is used when the raters (or measurement devices) are considered random samples from a larger population of raters and you want to generalize your findings to this broader context. It's appropriate when different imaging sites might use different equipment or personnel, and you wish to assess the reliability of measurements across these variable conditions.
-
-Both of these ICC types use the 'k' form, which means that the reliability is assessed based on the average of multiple measurements (in this case, multiple imaging sessions or sites), which generally provides a more robust and stable estimate of reliability.
-
-
-
-Summmary  reliability data by Site
+### Summmary  reliability data by Site
 
 ```{r}
 print( reli_stats( "outcome", "Site", "Subject", data=dd ) )
@@ -224,9 +227,9 @@ print( reli_aov( "outcome", "Site", "Subject", data=dd ) )
 ```
 
 
-Summmary  reliability data by Site
+### Summmary  reliability data by Site
 
-```{r setitup,echo=FALSE}
+```{r setitup,echo=FALSE,fig.width=9,fig.height=4.5}
 t1names = c( 
   getNamesFromDataframe( c("T1Hier_","vol",'dktcortex'), dd ),
   getNamesFromDataframe( c("T1Hier_","vol",'deep_cit'), dd ),
@@ -257,9 +260,12 @@ allnames = c( getNamesFromDataframe( "LRAVG", dd ), rsnames )
 allnames = allnames[ -grep("could_",allnames)]
 allnames = allnames[ -grep("include_",allnames)]
 
-mysam = sample( allnames, 5)
+mysam = sample( allnames, 10 )
 for ( outcome in mysam ) {
-  print( reli_stats( outcome, item="Site", id="Subject", data=dd ) )
+  myrel = reli_stats( outcome, item="Site", id="Subject", data=dd )
+  print( myrel )
+  print( plot( myrel ) + ggtitle( paste( outcome , " : ICC ", myrel$icc[5,'icc'], " : CV ", myrel$cv ) ) +
+    theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) )
   print( outcome )
 }
 #######
@@ -290,7 +296,7 @@ for ( x in allnamesu ) {
   ee$istrain=TRUE
   ee=adjustByCovariates( ee, adjform, 'istrain', allowMissing=TRUE )
   }
-allnames=getNamesFromDataframe("_adjusted",ee)
+allnamesu=allnames=getNamesFromDataframe("_adjusted",ee)
 myiccs = data.frame( )
 for ( a in allnamesu ) {
   n = nrow( myiccs) + 1
@@ -362,6 +368,44 @@ ggpubr::ggboxplot(myiccs, y = "icc", x='modality',
    palette = 'Dark2', title='ICC variability by modality for ROI representation' )+ 
   theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
 
+myiccs$modality_st=myiccs$modality
+asel = multigrep( c("cerebellum","vol"), myiccs$anat, intersect=TRUE )
+myiccs$modality_st[asel]=paste0(myiccs$modality_st[asel],'_vol_cbl')
+asel = multigrep( c("dktcortex","thk"), myiccs$anat, intersect=TRUE )
+myiccs$modality_st[asel]=paste0(myiccs$modality_st[asel],'_thk_ctx')
+asel = multigrep( c("dktcortex","vol"), myiccs$anat, intersect=TRUE )
+myiccs$modality_st[asel]=paste0(myiccs$modality_st[asel],'_vol_ctx')
+asel = multigrep( c("dktcortex","mean_fa"), myiccs$anat, intersect=TRUE )
+myiccs$modality_st[asel]=paste0(myiccs$modality_st[asel],'_fa_ctx')
+asel = multigrep( c("cit168","vol"), myiccs$anat, intersect=TRUE )
+myiccs$modality_st[asel]=paste0(myiccs$modality_st[asel],'_cit')
+asel = multigrep( c("cit168","thk"), myiccs$anat, intersect=TRUE )
+myiccs$modality_st[asel]=paste0(myiccs$modality_st[asel],'_cit')
+asel = multigrep( c("jhu","mean_fa"), myiccs$anat, intersect=TRUE )
+myiccs$modality_st[asel]=paste0(myiccs$modality_st[asel],'_fa_jhu')
+asel = multigrep( c("DefaultMode"), myiccs$anat, intersect=TRUE )
+myiccs$modality_st[asel]=paste0(myiccs$modality_st[asel],'_dfn')
+# asel = multigrep( c("MemoryRetrieval"), myiccs$anat, intersect=TRUE )
+# myiccs$modality_st[asel]=paste0(myiccs$modality_st[asel],'_mem')
+asel = multigrep( c("Subcortical"), myiccs$anat, intersect=TRUE )
+myiccs$modality_st[asel]=paste0(myiccs$modality_st[asel],'_sub')
+asel = myiccs$modality_st=='t1'
+myiccs$modality_st[asel]='t1_nbm_mtl'
+asel = myiccs$modality_st=='t1'
+myiccs$modality_st[asel]='t1_nbm_mtl'
+asel = myiccs$modality_st=='DTI'
+myiccs$modality_st[asel]='DTI_gm'
+asel = myiccs$modality_st=='rsfMRI_dfn_sub'
+myiccs$modality_st[asel]='rsfMRI_dfn'
+ table(myiccs$modality_st)
+```
+
+
+```{r boxplotroi2,fig.width=12,fig.height=6,echo=FALSE,eval=TRUE}
+ggpubr::ggboxplot(myiccs, y = "icc", x='modality_st',
+   color = "modality", # fill = "anat",
+   title='ICC variability by modality for ROI representation' )+ 
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=1))
 ```
 
 
@@ -669,4 +713,9 @@ ggpubr::ggboxplot(temp, y = "icc", x='method',
 
 ```
 
+
+
+
+
+## Examples of image variability
 
