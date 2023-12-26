@@ -1,5 +1,5 @@
 ---
-title: "Hawco traveling subjects reproducibility analysis"
+title: "Joint Hawco, DTI, SRPBS traveling subjects reproducibility analysis"
 author: "Brian B. Avants"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_document
@@ -106,27 +106,29 @@ FIXME
 
 Values range from 0 ( unusable ) to 3 ( best ) quality.
 
-```{r readitsrpbs,echo=FALSE}
+```{r readall3,echo=FALSE}
 library(ANTsR)
 rdir="/Users/stnava/code/antspymm_reproducibility/"
-if ( ! exists("dd") )
-  dd = read.csv( paste0( rdir, "/data/m3ri_travel_antspymm.csv" ) )
-# extract information about which year data was collected
-dd$Year = NA
-for ( k in 1:nrow( dd ) ) {
-  dd[k,'Year']=as.numeric(substr(unlist( strsplit( dd[k,'date'],'-'))[2],2,2))
-  dd[k,'Year']=as.numeric(dd[k,'Year'])-1
-}
-# extract information about which Site data was collected
-dd$Site = NA
-for ( k in 1:nrow( dd ) ) {
-  temp = unlist( strsplit( dd[k,'date'],'-'))[2]
-  dd[k,'Site']=substr( temp,3,nchar(temp))
-}
-dd$Subject = dd$subjectID
+if ( ! exists("dd") ) {
+  dd0 = read.csv( paste0( rdir, "/data/Hawco_rep_comm.csv" ) )
+  dd1 = read.csv( paste0( rdir, "/data/SRPBS_rep_comm.csv" ) )
+  dd2 = read.csv( paste0( rdir, "/data/DTI_rep_comm.csv" ) )
+  dd0$study='Hawco'
+  dd1$study='SRPBS'
+  dd2$study='DTI'
+  ccnames = colnames( dd0 )
+  dd1b = dd1[ , colnames(dd1) %in% ccnames ]
+  dd2b = dd2[ , colnames(dd1) %in% ccnames ]
+  allcom = intersect( ccnames, colnames(dd1))
+  allcom = intersect( allcom, colnames(dd2))
+  dd = dplyr::bind_rows( dd0, dd1 )
+  dd = dplyr::bind_rows( dd, dd2 )
+  dd$Year[ is.na( dd$Year)] = 0
+  dd$age_BL[ is.na( dd$age_BL)] = dd$age[ is.na( dd$age_BL)]
+  }
 
-myoc = 'T1Hier_thk_right_precentraldktcortex'
 myoc = "rsfMRI_DefaultMode_2_DefaultMode"
+myoc = 'T1Hier_thk_right_precentraldktcortex'
 dd$outcome = dd[,myoc]
 # quick look at longitudinal distribution
 mdlSite = lm( T1Hier_resnetGrade ~( Site  + Subject ) * Year, data=dd )
@@ -135,44 +137,9 @@ visreg::visreg( mdlSite, 'Year', by='Subject' )
 
 usubs = sort( unique( dd$Subject ) )
 usite = sort( unique( dd$Site ) )
-
-############################################
-dd$age =dd$age_median = NA
-for ( u in usubs ) {
-  for ( yy in 0:4 ) {
-    usel =subtyper::fs( dd$subjectID == u & dd$Year == yy )
-    if ( sum(usel) > 0 ) {
-      dd$age[usel] = mean( dd$T1w_brainage[ usel ], na.rm=T )
-      dd$age_median[usel] = median( dd$T1w_brainage[ usel ], na.rm=T )
-    }
-  }
-}
-dd$age_BL = NA 
-dd$isBL = FALSE
-for ( u in usubs ) {
-  uselall =subtyper::fs( dd$subjectID == u )
-  miny = min( dd$Year[uselall], na.rm=T )
-  usel =subtyper::fs( dd$subjectID == u & dd$Year == miny )
-  dd$age_BL[uselall] = mean( dd$T1w_brainage[ usel ], na.rm=T )
-  dd$isBL[ usel ] = TRUE
-  }
-# technically not baseline bc only at year 3
-# dd$isBL[ dd$Site == 'CMP'] = TRUE
-dd$deltaTime = dd$age - dd$age_BL
-############################################
-print( ( table( dd$Site, dd$Year ) ) )
+print( ( table( dd$Site, dd$Subject ) ) )
   
 
-```
-
-Demonstrate effect of subject vs effect of Site
-
-```{r plotbysubject,fig.width=16,fig.height=16,eval=TRUE,echo=FALSE,message=FALSE}
-library(GGally)
-mycols = c('Year', 'outcome', 'Site' )
-nna = ! is.na( dd$outcome )
-print(
-  ggpairs(data = dd[nna, c('Subject',mycols)] ) )
 ```
 
 ```{r gg2,fig.width=16,fig.height=5,echo=FALSE}
@@ -287,6 +254,9 @@ allnames = unique( c( t1names, dtnames, rsnames ) )
 dd = mapLRAverageVar( dd, allnames[grep("left",allnames)] )
 dd = mapLRAverageVar( dd, allnames[grep("_l_",allnames)], '_l_', '_r_' )
 allnames = c( getNamesFromDataframe( "LRAVG", dd ), rsnames )
+allnames = allnames[ -grep("could_",allnames)]
+allnames = allnames[ -grep("include_",allnames)]
+
 mysam = sample( allnames, 5)
 for ( outcome in mysam ) {
   print( reli_stats( outcome, item="Site", id="Subject", data=dd ) )
@@ -312,8 +282,15 @@ allnames=unique(allnames)
 allnamesu = allnames# [ grep("T1Hier_",allnames)]
 # allnamesu = allnames[ grep("rsfMRI",allnames)]
 #####################
-ee = dd[  subtyper::fs( dd$Subject %in% usubs & dd$isBL == TRUE ), ]
-# ee = dd
+ee = dd
+ee$istrain=TRUE
+for ( x in allnamesu ) {
+  ee$Site=as.character(ee$Site)
+  adjform = paste( x, "~T1Hier_resnetGrade+age_BL" )
+  ee$istrain=TRUE
+  ee=adjustByCovariates( ee, adjform, 'istrain', allowMissing=TRUE )
+  }
+allnames=getNamesFromDataframe("_adjusted",ee)
 myiccs = data.frame( )
 for ( a in allnamesu ) {
   n = nrow( myiccs) + 1
@@ -350,14 +327,14 @@ print(  ggpubr::ggbarplot( myiccsp, 'anat', 'icc', color='anat',fill='anat', pal
 ```{r hqt1,echo=FALSE,fig.width=10,fig.height=5}
 library( emmeans )
 ggpubr::ggboxplot(dd, y = "T1Hier_resnetGrade", x='Site',
-   color = "Site", # fill = "anat",
+#   color = "Site", # fill = "anat",
    palette = 'Set1', title='Image quality variability by site' )+ 
   theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
 cat(
   "\n\n\n\n\n\n"
 )
 ggpubr::ggboxplot(dd, y = "T1Hier_resnetGrade", x='Subject',
-   color = "Subject", # fill = "anat",
+#   color = "Subject", # fill = "anat",
    palette = 'Set1', title='Image quality variability by subject' )+ 
   theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
 
@@ -446,71 +423,84 @@ print( ggpubr::ggbarplot( ccdf, 'Koo', 'Freq', color='Koo',fill='Koo', palette=b
 myiccsimlr = data.frame()
 rm( initu )
 # for ( siteonwhichtotrain in c(bestsite1,bestsite2,bestsite3,bestsite4) ) {
-for ( siteonwhichtotrain in goodsites ) {
+for ( siteonwhichtotrain in usite ) {
   print( paste("USE SITE: ", siteonwhichtotrain ))
   lrt1 = getNamesFromDataframe( c("T1Hier","LRAV"), ee )
   rsfc = getNamesFromDataframe( c("rsfMRI","_2_"), ee )
-  dtnm = getNamesFromDataframe( c("DTI","LRAV"), ee )
+  dtnm = getNamesFromDataframe( c("DTI","LRAV"), ee, exclusions=c("could","_and_") )
   sitesel = ee$Site == siteonwhichtotrain
   m1 = ee[ sitesel , lrt1 ]
   m2 = ee[ sitesel , rsfc ]
   m3 = ee[ sitesel , dtnm ]
+  if ( sum( is.na( m2[,1]) ) == nrow(m2) ) m2=NULL
+  if ( sum( is.na( m3[,1]) ) == nrow(m3) ) m3=NULL
   if ( nrow( m1 ) > 1 ) {
-    matlist = list(
-      t1=scale(m1,T,T),
-      rsf=antsrimpute(scale(m2,T,T)),
-      dt=antsrimpute(scale(m3,T,T)))
+    if ( !is.null(m1) & !is.null(m2) & !is.null(m3) ) {
+      matlist = list(
+        t1=scale(m1,T,T),
+        rsf=antsrimpute(scale(m2,T,T)),
+        dt=antsrimpute(scale(m3,T,T)))
+    } else if ( !is.null(m1) & !is.null(m2)) {
+      matlist = list(
+        t1=scale(m1,T,T),
+        rsf=antsrimpute(scale(m2,T,T)) )
+    } else if ( !is.null(m1) & !is.null(m3) ) {
+      matlist = list(
+        t1=scale(m1,T,T),
+        dt=antsrimpute(scale(m3,T,T)))
+    }
     nmods = length( matlist )
     regs = list() # regularizeSimlr( matlist, fraction=0.1, sigma=c(1.0,1.0) )
     for ( j in 1:length(matlist))
       regs[[j]] = diag( ncol( matlist[[j]]) )
-#    regs = regularizeSimlr( matlist, fraction=0.08, sigma=rep(1.5,nmods) )
+#    regs = regularizeSimlr( matlist, fraction=0.05, sigma=rep(2.0,nmods) )
     ###########
     myjr = TRUE
+    prescaling = c( 'robust', 'np' )
     prescaling = c( 'centerAndScale', 'sqrtnp' )
     optimus = 'lineSearch'
     maxits = 100
     ebber = 0.99
     quantval = 0.5
     pizzer = rep( "positive", nmods )
+    objectiver = 'lowRankRegression' ; mixer = 'pca'
     objectiver = 'cca' ; mixer = 'pca'
     objectiver = 'regression' ; mixer = 'ica'
     sparval = rep( 0.8, nmods )
-    ##########
-    nsimlr = nrow(matlist[[1]])
+    ################################################
+    nsimlr = 3 # nrow(m1)-1
     initu = initializeSimlr(
-                        matlist,
-                        nsimlr,
-                        jointReduction = myjr,
-                        zeroUpper = FALSE,
-                        uAlgorithm = "pca",
-                        addNoise = 0 )
-    simlrX = simlr( matlist, 
-                            regs, 
-                            iterations=maxits, 
-                            verbose=FALSE,
-                            randomSeed = 0,
-                            mixAlg=mixer,
-                            energyType=objectiver,
-                            scale = prescaling,
-                            sparsenessQuantiles=sparval,
-                            positivities = pizzer, expBeta=ebber,
-                            optimizationStyle=optimus,
-                            initialUMatrix=initu )
+      matlist, nsimlr, jointReduction = myjr,
+      zeroUpper = FALSE, uAlgorithm = "pca", addNoise = 0 )
+    simlrX = simlr( matlist, regs, 
+      iterations=maxits, verbose=FALSE, randomSeed = 0,
+      mixAlg=mixer, 
+      energyType=objectiver, 
+      scale = prescaling, sparsenessQuantiles=sparval,
+      positivities = pizzer, expBeta=ebber,
+      optimizationStyle=optimus,
+      initialUMatrix=initu )
+    names(simlrX$v)=names(matlist)
     sitetrtsimlr=data.frame()
     for ( jj in 1:length(usite)) {
       bestsitex = usite[jj]
       sitesel = subtyper::fs( ee$Site == bestsitex )
       lsubs = ee[ sitesel, 'Subject' ]
       t1 = ee[ sitesel , lrt1 ]
-      rsf = ee[ sitesel , rsfc ]
-      dt = ee[ sitesel , dtnm ]
       proj1=data.frame(
             Subject = lsubs,
-            t1=data.matrix(t1) %*% simlrX$v[[1]], 
-            rsf=data.matrix(rsf) %*% simlrX$v[[2]], 
-            dt=data.matrix(dt) %*% simlrX$v[[3]], 
-            Site=rep(bestsitex,nrow(t1)))
+            Site=rep(bestsitex,nrow(t1)),
+            t1=data.matrix(t1) %*% simlrX$v[["t1"]] )
+      if ( !is.null( m2 ) ) {
+        rsf = ee[ sitesel , rsfc ] 
+        projrsf = data.frame( rsf = data.matrix(rsf) %*% simlrX$v[["rsf"]] )
+        proj1 = cbind( proj1, projrsf )
+        }
+      if ( !is.null( m3 ) ) {
+        dt = ee[ sitesel , dtnm ] 
+        projdt = data.frame( dt = data.matrix(dt) %*% simlrX$v[["dt"]] )
+        proj1 = cbind( proj1, projdt )
+        }
       if ( jj == 1 ) sitetrtsimlr=proj1 else sitetrtsimlr=rbind(sitetrtsimlr,proj1)
       }
     ######
@@ -680,9 +670,3 @@ ggpubr::ggboxplot(temp, y = "icc", x='method',
 ```
 
 
-
-### common output 
-
-```{r comm,echo=FALSE}
-write.csv(ee, paste0(rdir,'data/Hawco_rep_comm.csv'), row.names=FALSE)
-```

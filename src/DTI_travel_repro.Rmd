@@ -638,3 +638,10 @@ ggpubr::ggboxplot(temp, y = "icc", x='method',
 ```
 
 
+
+
+### common output 
+
+```{r comm,echo=FALSE}
+write.csv(ee,  paste0(rdir,'data/DTI_rep_comm.csv'), row.names=FALSE)
+```
