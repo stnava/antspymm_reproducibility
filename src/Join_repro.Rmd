@@ -19,9 +19,9 @@ We perform reproducibility analyses for ANTsPyMM based on traveling subject data
 
 Each dataset is analyzed by distributed computing with ANTsPyMM as in `src/hawco_processing`.
 
-Test-retest reliability assessment of MRI measurement is crucial for ensuring that the observed changes in the brain structure over time are due to actual physiological changes rather than variations in the imaging process itself. Traveling subject studies involve scanning the same subjects on multiple MRI scanners at different locations. These studies help in assessing consistency and/or agreement of image quantification where the only variables are the machines themselves. This is crucial for multi-site studies where data is pooled from various sources.  
+Traveling subject studies involve scanning the same subjects on multiple MRI scanners at different locations. These studies help in assessing consistency and/or agreement of image quantification where the only variables are the machines themselves. This is crucial for understanding power in multi-site studies of natural history or intervention and for ensuring that the observed changes in brain structure or function are due to actual physiological changes rather than variations in the imaging process itself.
 
-In this study, we employ traveling cohort data to assess the agreement of imaging derived phentoypes (IDPs)pooled across multiple sites for the purposes of statistical inference. These data will establish expectations of repeatability for T1w, DTI and rsfMRI as measured by ANTsPyMM processing.  Thus, we use these data to characterize the consistency and reliability of these tools when applied to data that has known systematic biases due to site and scanner differences.  The results confirm that findings and conclusions drawn from ANTsPyMM are reliable and not overwhelmed by scanner-specific differences or inconsistencies.  This knowledge is critical for a foundational framework such as ANTsX upon which scientific studies, machine learning platforms and other methodological comparisons are based.
+In this study, we employ traveling cohort data to assess the agreement of imaging derived phentoypes (IDPs) pooled across multiple sites for the purposes of statistical inference. These data will establish expectations of repeatability for T1w, DTI and rsfMRI as measured by ANTsPyMM processing.  Thus, we use these data to characterize the consistency and reliability of these tools when applied to data that has known systematic biases due to site and scanner differences.  The results confirm that findings and conclusions drawn from ANTsPyMM are reliable and not overwhelmed by scanner-specific differences or inconsistencies.  This knowledge is critical for a foundational framework such as ANTsX upon which scientific studies, machine learning platforms and other methodological comparisons are based.
 
 
 ## introduction
@@ -59,7 +59,9 @@ These data enable us to investigate the reliability of our imaging-derived pheno
 
   * site CMP in the Hawco cohort exists only at year 3 and -- as such -- does not contribute to baseline data.
 
-We find that (1) the majority of IDPs show superior reliability and (2) joint reduction of IDPs with SiMLR improves reliability further.  **ANTsPyMM IDPs derived from the same subjects imaged at different sites with MRI from various manufacturers show overall high reliability.**  This provides empirical evidence that multiple modality MRI may be used to derive quantitative phenotypes on which predictive models may be based.
+We find that (1) the majority of IDPs show superior reliability and (2) joint reduction of IDPs with SiMLR improves reliability further.  **ANTsPyMM IDPs derived from the same subjects imaged at different sites with MRI from various manufacturers show overall high reliability.**  This provides empirical evidence that multiple modality MRI may be used to derive quantitative phenotypes on which predictive models may be based.  
+
+FIXME - move this statement: Statistical control for site effects should still be applied at the population level.
 
 ## background
 
@@ -224,12 +226,7 @@ The 'k' form of ICC means that the reliability is based on the average of multip
 
 - **Traveling Cohort Nature**: Different subjects are imaged at multiple locations or with various MRI scanners.  These scanners are considered to be randomly selected raters that are representative of a larger sample.  This is further justified by the joining of three different TC datasets.  Thus, we argue that these results about MRI IDP consistency should generalize beyond the specific scanners or locations used in the study.
 
-In this study, the goal is to study the consistency of MRI IDPs across different imaging locations or scanners as processed by ANTsPyMM.
-
-- **Multiple Raters/Instruments**: Each subject's MRI IDPs are derived from multiple MRI scanners which are considered as "raters" in this context.
-- **Representation of Diverse Conditions**: These multiple measurements represent a realistic range of conditions under which MRI IDPs are obtained in practice.
-- **Importance of Averaging**: The reliability of the average of measurements (IDPs from different scanners) is more relevant than individual measurements. This is because IDP interpretations are based on aggregated data from different sources in the context of clinical trials that ultimately using population-level statistical summaries.
-- **Appropriateness of ICC(2,k) Model**: Lastly, ICC(2,k) is suitable for assessing the reliability of traveling cohort averaged measurements, as it considers both between-subject variability and measurement variability across different scanners. In contrast, ICC(1,k) only considers scanners as random effects while ICC(3,k) only considers subjects as random effects. ICC(2,k) considers both scanners and subjects as random effects and as such is most appropriate in this context.
+We study the consistency of MRI IDPs collected from different imaging locations or scanners and processed by ANTsPyMM. These multiple measurements represent a realistic range of conditions under which MRI IDPs are obtained in practice. Such data is typically interpreted via population-level statistical summaries which often control for both site and subject level random effects.  In this context, the ICC(2,k) model is the appropriate choice as it considers both between-subject variability and measurement variability across different scanners. In contrast, ICC(1,k) considers scanners as random effects while ICC(3,k) considers subjects as random effects. ICC(2,k) considers both which is analogous to standard population-level statistical modeling where both site and subject variables may be treated as random effects.
 
 ### Summmary  reliability data by Site
 
@@ -237,7 +234,6 @@ In this study, the goal is to study the consistency of MRI IDPs across different
 print( reli_stats( "outcome", "Site", "Subject", data=dd ) )
 print( reli_aov( "outcome", "Site", "Subject", data=dd ) )
 ```
-
 
 ### Summmary  reliability data by Site
 
@@ -479,7 +475,9 @@ print( ggpubr::ggbarplot( ccdf, 'Koo', 'Freq', color='Koo',fill='Koo', palette=b
 myiccsimlr = data.frame()
 rm( initu )
 # for ( siteonwhichtotrain in c(bestsite1,bestsite2,bestsite3,bestsite4) ) {
-for ( siteonwhichtotrain in usite ) {
+hawcosites = table( dd$Site[ dd$study == 'Hawco' ] )
+hawcosites = names( hawcosites[ hawcosites > 1 ])
+for ( siteonwhichtotrain in hawcosites ) {
   print( paste("USE SITE: ", siteonwhichtotrain ))
   lrt1 = getNamesFromDataframe( c("T1Hier","LRAV"), ee )
   rsfc = getNamesFromDataframe( c("rsfMRI","_2_"), ee )
@@ -525,9 +523,10 @@ for ( siteonwhichtotrain in usite ) {
     sparval = rep( 0.8, nmods )
     ################################################
     nsimlr = 3 # nrow(m1)-1
-    initu = initializeSimlr(
-      matlist, nsimlr, jointReduction = myjr,
-      zeroUpper = FALSE, uAlgorithm = "pca", addNoise = 0 )
+    if ( ! exists( "initu" ) )
+      initu = initializeSimlr(
+        matlist, nsimlr, jointReduction = myjr,
+        zeroUpper = FALSE, uAlgorithm = "pca", addNoise = 0 )
     simlrX = simlr( matlist, regs, 
       iterations=maxits, verbose=FALSE, randomSeed = 0,
       mixAlg=mixer, 
@@ -535,7 +534,7 @@ for ( siteonwhichtotrain in usite ) {
       scale = prescaling, sparsenessQuantiles=sparval,
       positivities = pizzer, expBeta=ebber,
       optimizationStyle=optimus,
-      initialUMatrix=initu )
+      initialUMatrix=initu[1:min(c(nrow(initu),nrow(m1))),  ] )
     names(simlrX$v)=names(matlist)
     sitetrtsimlr=data.frame()
     for ( jj in 1:length(usite)) {
