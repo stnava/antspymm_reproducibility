@@ -85,6 +85,7 @@ A different guideline is given by Koo and Li (2016):
 
 
 ```{r global options, include=FALSE}
+set.seed(0)
 library( knitr )
 library( ANTsR )
 library( ggplot2 )
@@ -131,10 +132,13 @@ FIXME
 
 Values range from 0 ( unusable ) to 3 ( best ) quality.
 
-```{r readall3,echo=FALSE}
+```{r readall3a,echo=FALSE}
 library(ANTsR)
-rdir="/Users/stnava/code/antspymm_reproducibility/"
+rdir=paste0("/Users/stnava/code/antspymm_reproducibility/")
 if ( ! exists("dd") ) {
+#  dd0 = read.csv( paste0( rdir, "Hawco_rep_comm.csv" ) )
+#  dd1 = read.csv( paste0( rdir, "SRPBS_rep_comm.csv" ) )
+#  dd2 = read.csv( paste0( rdir, "DTI_rep_comm.csv" ) )
   dd0 = read.csv( paste0( rdir, "/data/Hawco_rep_comm.csv" ) )
   dd1 = read.csv( paste0( rdir, "/data/SRPBS_rep_comm.csv" ) )
   dd2 = read.csv( paste0( rdir, "/data/DTI_rep_comm.csv" ) )
@@ -142,18 +146,22 @@ if ( ! exists("dd") ) {
   dd1$study='SRPBS'
   dd2$study='DTI'
   ccnames = colnames( dd0 )
-  dd1b = dd1[ , colnames(dd1) %in% ccnames ]
-  dd2b = dd2[ , colnames(dd1) %in% ccnames ]
+  dd1b = dd1[ , intersect( colnames(dd1) , ccnames) ]
+  dd2b = dd2[ , intersect( colnames(dd2) , ccnames) ]
   allcom = intersect( ccnames, colnames(dd1))
   allcom = intersect( allcom, colnames(dd2))
   dd = dplyr::bind_rows( dd0, dd1 )
   dd = dplyr::bind_rows( dd, dd2 )
   dd$Year[ is.na( dd$Year)] = 0
   dd$age_BL[ is.na( dd$age_BL)] = dd$age[ is.na( dd$age_BL)]
+#  dd = dd[ subtyper::fs( dd$rsfMRI_rsf_n_outliers < 80 ) , ] 
   }
+```
 
+```{r readall3b,echo=FALSE}
 myoc = "rsfMRI_DefaultMode_2_DefaultMode"
 myoc = 'T1Hier_thk_left_superior_frontaldktcortex'
+myoc = "rsfMRI_fcnxpro128_DefaultMode_2_DefaultMode"
 dd$outcome = dd[,myoc]
 # quick look at longitudinal distribution
 mdlSite = lm( T1Hier_resnetGrade ~( Site  ) + 1, data=dd )
@@ -252,8 +260,11 @@ t1names = c(
   getNamesFromDataframe( c("T1Hier_",'pons','vol'), dd )
 )
 rsnames = getNamesFromDataframe( c("rsfMRI"), dd, exclusions=c('_alff','_falff','snr','evr','FD','dvars') )
-rsnames = getNamesFromDataframe( c("rsfMRI",'_2_'), dd, exclusions=c('snr','evr','FD','dvars') )
-
+rsnames = getNamesFromDataframe( c("rsfMRI",'_2_','efault','fcnxpro128'), dd, exclusions=c('snr','evr','FD','dvars') )
+# rsnames = getNamesFromDataframe( c("rsfMRI",'_falff'), dd, exclusions=c('snr','evr','FD','dvars') )
+dd$globalmeanrsf = rowMeans(dd[,rsnames] )
+dd$globalsdrsf = apply(dd[,rsnames], FUN=sd, MARGIN=1, na.rm=FALSE)
+# dd[,rsnames] = dd[,rsnames] - dd$globalmeanrsf
 dtnames = c( 
   getNamesFromDataframe( c("DTI_mean_fa"), dd ) )
 dtnames = dtnames[ -grep("could",dtnames)]
@@ -304,9 +315,10 @@ for ( x in allnamesu ) {
   ee$istrain=TRUE
   ee=adjustByCovariates( ee, adjform, 'istrain', allowMissing=TRUE )
   }
-allnamesu=allnames=getNamesFromDataframe("_adjusted",ee)
+# allnamesu=allnames=getNamesFromDataframe("_adjusted",ee)
+options(warn=0)
 myiccs = data.frame( )
-for ( a in allnamesu ) {
+for ( a in sample(allnamesu) ) {
   n = nrow( myiccs) + 1
   tempicc = icck( ee, a )
   myiccs[n,c("anat",'icc')]=c(a,tempicc )
@@ -374,7 +386,7 @@ myiccs$modality[ grep("DTI",myiccs$anat)]='DTI'
 ggpubr::ggboxplot(myiccs, y = "icc", x='modality',
    color = "modality", # fill = "anat",
    palette = 'Dark2', title='ICC variability by modality for ROI representation' )+ 
-  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1) + ylim(0,1))
 
 myiccs$modality_st=myiccs$modality
 asel = multigrep( c("cerebellum","vol"), myiccs$anat, intersect=TRUE )
@@ -404,15 +416,22 @@ myiccs$modality_st[asel]='t1_nbm_mtl'
 asel = myiccs$modality_st=='DTI'
 myiccs$modality_st[asel]='DTI_gm'
 asel = myiccs$modality_st=='rsfMRI_dfn_sub'
-myiccs$modality_st[asel]='rsfMRI_dfn'
- table(myiccs$modality_st)
+myiccs$modality_st[asel]='rsfMRI_dfn_sub'
+
+asel = multigrep( c("Attention"), myiccs$anat, intersect=TRUE )
+myiccs$modality_st[asel]='rsfMRI_dfn_att'
+asel = multigrep( c("Task"), myiccs$anat, intersect=TRUE )
+myiccs$modality_st[asel]='rsfMRI_dfn_tsk'
+
+table(myiccs$modality_st)
+
 ```
 
 
 ```{r boxplotroi2,fig.width=12,fig.height=6,echo=FALSE,eval=TRUE}
 ggpubr::ggboxplot(myiccs, y = "icc", x='modality_st',
    color = "modality", # fill = "anat",
-   title='ICC variability by modality for ROI representation' )+ 
+   title='ICC variability by modality for ROI representation',ylim=c(0,1) )+ 
   theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=1))
 ```
 

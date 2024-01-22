@@ -98,22 +98,24 @@ Values range from 0 ( unusable ) to 3 ( best ) quality.
 ```{r readitsrpbs,echo=FALSE}
 library(ANTsR)
 rdir="/Users/stnava/code/antspymm_reproducibility/"
-dd = read.csv( paste0( rdir, "/data/srpbs_participants.csv" ) )
-# qct1 = read.table( paste0( rdir, "/data/srpbs_group_T1w.tsv" ), header = TRUE )
-# qct1$participants_id=gsub("_T1w","",qct1$bids_name)
-# qct1$participants_id=gsub("_run-01","",qct1$participants_id)
-# dd = merge(dd,qct1,by='participants_id')
+if ( ! exists( "dd") ) {
+  dd = read.csv( paste0( rdir, "/data/srpbs_participants.csv" ) )
+  # qct1 = read.table( paste0( rdir, "/data/srpbs_group_T1w.tsv" ), header = TRUE )
+  # qct1$participants_id=gsub("_T1w","",qct1$bids_name)
+  # qct1$participants_id=gsub("_run-01","",qct1$participants_id)
+  # dd = merge(dd,qct1,by='participants_id')
 
-## pym data
-pym = read.csv( paste0( rdir, "/data/srpbs_travel_antspymm.csv") )[,-c(1:2)]
-sharesubs = intersect( dd$participants_id, pym$subjectID )
-pym = pym[ pym$subjectID %in% sharesubs, ]
-dd = dd[ dd$participants_id %in% sharesubs, ]
-pym$participants_id = pym$subjectID
-dd = merge( dd, pym, by='participants_id')
+  ## pym data
+  pym = read.csv( paste0( rdir, "/data/srpbs_travel_antspymm.csv") )[,-c(1:2)]
+  sharesubs = intersect( dd$participants_id, pym$subjectID )
+  pym = pym[ pym$subjectID %in% sharesubs, ]
+  dd = dd[ dd$participants_id %in% sharesubs, ]
+  pym$participants_id = pym$subjectID
+  dd = merge( dd, pym, by='participants_id')
+}
 
 myoc = 'T1Hier_thk_right_precentraldktcortex'
-myoc = "rsfMRI_DefaultMode_2_DefaultMode"
+myoc = "rsfMRI_fcnxpro128_DefaultMode_2_DefaultMode"
 dd$outcome = dd[,myoc]
 # dd = dd[ dd$Scanner != 'Signa' & dd$Site != 'KUT' & dd$T1Hier_resnetGrade >= 1.5, ]
 dd = dd[ dd$Scanner != 'Signa' & dd$Site != 'KUT' & dd$Day == 1, ]
@@ -396,6 +398,57 @@ print(  ggpubr::ggbarplot( myiccsp, 'anat', 'icc', color='anat',fill='anat', pal
 
 # mykap = kappam.fleiss( iccdf, detail=TRUE )
 # print( mykap )
+```
+
+
+
+## a special section for discerning the reproducibility among different rsfMRI runs
+
+
+```{r rsfmriruns,fig.width=8,fig.height=8,echo=FALSE,eval=TRUE}
+library(irr)
+ee = dd[  dd$Day == 1 & dd$Subject %in% usubs, ]
+#####################
+library(irr)
+#####################
+xcl = c( 'snr','evr','FD','dvars','outlier','minute', 'nc_','despik','motion','ermis','erebel','alff_mean','alff_sd','Unk','Subcortical') 
+allrsnames_cnx = getNamesFromDataframe( c("rsfMRI_fcnxpro128","Default"), ee, exclusions=c('_alff', '_falff',xcl))
+allrsnames_fal = getNamesFromDataframe( c("rsfMRI_fcnxpro128"), ee, exclusions=c('_alff', '_2_',xcl))
+allrsnames_alf = getNamesFromDataframe( c("rsfMRI_fcnxpro128"), ee, exclusions=c('_falff', '_2_',xcl))
+n2sam=length(allrsnames_cnx)
+ss = sample(1:length(allrsnames_fal),n2sam)
+rsnames2eval = c( sample(allrsnames_cnx,n2sam), allrsnames_fal[ss], allrsnames_alf[ss] )
+rsnames2eval = c( allrsnames_cnx, allrsnames_fal[ss], allrsnames_alf[ss] )
+rsnames2evaltypes = c( rep('cnx',n2sam), rep('flf',n2sam), rep('alf',n2sam) )
+myiccsrsf = data.frame( )
+ct=1
+for ( aa in rsnames2eval ) {
+  cat( paste0( round( ct / length(rsnames2eval) * 100), "..." ) )
+  for ( run in 100:159 ) {
+    runname = paste0("rsfMRI_fcnxpro",run)
+    a = gsub( "rsfMRI_fcnxpro128", runname , aa )
+    n = nrow( myiccsrsf) + 1
+    tempicc = icck( ee, a )
+    if ( tempicc > 1 ) tempicc=NA
+    myiccsrsf[n,c("anat",'icc','run','type')]=c(a,tempicc, run, rsnames2evaltypes[ct] )
+  }
+  ct = ct + 1
+}
+myiccsrsf$icc = as.numeric( myiccsrsf$icc )
+myiccsrsf = myiccsrsf[ !is.na( myiccsrsf$icc ) & myiccsrsf$icc > 0 ,]
+print( aggregate( icc ~ run + type , data=myiccsrsf, FUN=mean ) )
+myiccsrsf = myiccsrsf[ order( myiccsrsf$icc, decreasing=T ), ]
+print( myiccsrsf )
+#############################################################################
+mm= aggregate( icc ~ run , data=myiccsrsf[myiccsrsf$type=='cnx',], FUN=mean )
+zz0=read.csv("/Users/stnava/data/PTBP/antspymm_evaluation/rsfanalysisFSIQ.csv")
+zz1=read.csv("/Users/stnava/data/PTBP/antspymm_evaluation/rsfanalysisAge.csv")
+zz2=read.csv("/Users/stnava/data/PTBP/antspymm_evaluation/rsfanalysisVIQ.csv")
+zz=cbind(fsiq_err=zz0$test_err,viq_err=zz2$test_err, age_err=zz1$test_err,zz0,mm)
+cor.test( zz$test_err, zz$icc )
+summary(lm( icc ~ fsiq_err + viq_err+ age_err + ff + loop + cens + HM , data=zz))
+summary(lm( icc ~ viq_err + ff + loop + cens + HM , data=zz))
+
 ```
 
 

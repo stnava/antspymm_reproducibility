@@ -99,7 +99,7 @@ print(
 
 ```
 
-```{r gg2,fig.width=16,fig.height=5,echo=FALSE}
+```{r gg2,fig.width=16,fig.height=5,echo=FALSE,eval=FALSE}
 # ggthemr_reset()
 ggthemr("fresh",text_size=20,spacing=1.3)
 ggplot(dd, aes(x = Subject, y = outcome, color = Site)) +
