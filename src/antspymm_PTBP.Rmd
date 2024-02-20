@@ -1,0 +1,554 @@
+---
+title: 'The Pediatric Template of Brain Perfusion: ANTsPyMM'
+author: "Brian B. Avants et al."
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+## Load relevant packages
+
+```{r setup,eval=TRUE,results='hide',warning=FALSE,echo=FALSE}
+# set this for your own compilation
+if ( ! exists("eval_rsf_mod")) eval_rsf_mod = 'cnx'
+bd = path.expand( "~/data/PTBP/" )
+if ( ! dir.exists( bd ) ) bd = "./"
+set.seed( 919 )
+library( pander )
+library( ggplot2 )
+library( randomForestExplainer )
+library( ANTsR )
+library( visreg )
+library( randomForest )
+library( subtyper )
+library( rsq )
+library( formattable )
+############
+qth=0.05
+mth='BH'
+if ( ! exists( "apym" ) ) {
+  apym = read.csv( paste0(bd,'ptbp_antspymm.csv'))
+  demog=read.csv(paste(bd,"dataindex/ptbp_summary_demographics.csv",sep='') )
+  demog$uid = paste0( demog$SubID, '-', demog$ScanDate )
+  demog$uid[ is.na(demog$SubID)]=NA
+  apym$uid = paste0( apym$subjectID, '-',  apym$date )
+  apym$uid[is.na(apym$subjectID)]=NA
+  demog = merge( demog, apym, by='uid', all=TRUE)
+  demog$T1Hier_BV = rowSums( demog[, 
+    getNamesFromDataframe(  c('vol','hemisphere'), demog )] )
+  demog = demog[ !is.na( demog$T1Hier_BV), ]
+  demog$T1Hier_BV = demog$T1Hier_BV / mean(demog$T1Hier_BV)
+  demog = demog[ demog$T1Hier_resnetGrade > 1.0, ]
+  # PTBP-PEDS086-20110906-perf-000_000-perfusion.png
+  # PEDS022-20111216
+  perfsel =  !is.na( demog$perf_gm_mean_cbf ) &
+  !is.na( demog$CBFMeanFrontal_Mid_L ) & # 
+    ! ( demog$uid %in%  c('PEDS050-20110223','PEDS021-20101010','PEDS086-20110906','PEDS022-20111216',  'PEDS071-20110712','PEDS079-20110824', 'PEDS102-20120730') )
+  # subtyper::fs( demog$perf_gm_mean < 0.03 & demog$perf_gm_mean > 0.001 )
+  cor.test( demog$CBFMeanFrontal_Mid_L[perfsel], demog$AgeAtScan[perfsel] )
+  cor.test( demog$perf_cbf_mean_left_superior_frontal[perfsel], demog$AgeAtScan[perfsel] )
+  cor.test( demog$perf_gm_mean_cbf[perfsel], demog$AgeAtScan[perfsel] )
+  ############################################################
+  nms = unique( c( getNamesFromDataframe( c('CBF','Frontal'), demog ),
+    getNamesFromDataframe(  c('CBF','Temporal'), demog ) ) )
+  nms = getNamesFromDataframe(  c('CBF'), demog,
+    exclusions=c( 'Vermis', 'Cerebelu', 'CBF_Frontal_Temporal_mean' ) )
+  demog$CBF_Frontal_Temporal_mean = rowMeans(  demog[,nms] )
+  nms = c( getNamesFromDataframe(  c('perf_mean','frontal'), demog ), 
+    getNamesFromDataframe(  c('perf_mean','temporal'), demog ))
+  demog$perf_frontal_temporal_mean = rowMeans(  demog[,nms] )
+  temp = demog[perfsel &  !is.na( demog$CBF_Frontal_Temporal_mean ) &
+    !is.na( demog$perf_frontal_temporal_mean ),]
+  library(lmerTest)
+  mxlcbf = lmer( CBF_Frontal_Temporal_mean ~ (1|SubID) + BV + AgeAtScan + Sex, data=temp )
+  mxlprf = lmer( perf_gm_mean ~ (1|SubID) + BV + AgeAtScan + Sex, data=temp )
+  rsq( mxlcbf )
+  rsq( mxlprf )
+  mdlcbf = lm( CBF_Frontal_Temporal_mean ~  1 + AgeAtScan + Sex, data=temp )
+  mdlprf = lm( perf_gm_mean ~ 1 + AgeAtScan + Sex, data=temp )
+  summary( mdlcbf )
+  summary( mdlprf )
+
+  mdlconv = lm( CBF_Frontal_Temporal_mean ~ perf_gm_mean, data=temp )
+
+  # identify baseline scan
+  demog$isBaseline=FALSE
+  usubs = unique( demog$SubID )
+  for ( u in usubs ) {
+    losel = subtyper::fs(demog$SubID == u)
+    if ( sum(losel) > 1 ) {
+      losel2 = losel & demog$AgeAtScan == min( demog$AgeAtScan[losel] )
+      grades = demog[losel2,'T1Hier_resnetGrade']
+      if ( sum(losel2) > 1 ) {
+        # highest quality
+        losel2 = losel & demog$AgeAtScan == min( demog$AgeAtScan[losel] ) & demog[,'T1Hier_resnetGrade'] == max(grades)
+      }
+      demog[losel2,'isBaseline']=TRUE
+    } else demog[losel,'isBaseline']=TRUE
+  }
+}
+###############
+###############
+```
+
+# Joint modeling of thickness, FA and CBF
+
+## collect data
+
+```{r allmods,echo=FALSE}
+if ( !exists("myseed") ) myseed=1
+doasym=FALSE
+demogpym = antspymm_predictors( demog, doasym=doasym )
+rsfxpt = 'rsfMRI_fcnxpro'
+if ( ! exists("xptnum")) rsfxptnum = 100 else rsfxptnum=xptnum
+# exclude all rsfMRI except the experiment of interest
+toexclude = getNamesFromDataframe( rsfxpt, demogpym, exclusions=paste0(rsfxpt,rsfxptnum) )
+demogpym = demogpym[ , ! (colnames(demogpym) %in% toexclude) ]
+wthk=!is.na( demogpym$T1Hier_resnetGrade )
+wcbf=perfsel & !is.na( demogpym$perf_gm_mean_cbf )
+tstrsfmriname=paste0("rsfMRI_fcnxpro", rsfxptnum, "_DefaultMode_2_DefaultMode")
+tstrsfmriname2=paste0("rsfMRI_fcnxpro", rsfxptnum, "_n_outliers")
+tstrsfmriname3=paste0("rsfMRI_fcnxpro", rsfxptnum, "_minutes_censored_data")
+wrs=!is.na(demogpym[ , tstrsfmriname ] )
+fanm="DTI_mean_fa.body_of_corpus_callosum.jhu_icbm_labels_1mm"
+wfa=subtyper::fs( !is.na(demogpym[,fanm]) & demogpym[,fanm] > 0.45 )
+motion_thresh = 1.0
+haveAllMerge=subtyper::fs( wthk & wfa & wcbf & wrs & 
+  demogpym[,tstrsfmriname3] > 4.0 & demogpym$DTI_dti_FD_mean/10 <= motion_thresh )
+comix=c( "area", "left","right","_l_","_r_",'central','occipital', 'fornix', 'unclassified',
+"_rn_", "_hth_","_va_","_nac_","_vep_","_sth_","_vtr_", "_hn_", 
+"fa_deep" )
+fanm = getNamesFromDataframe( c("DTI_",'mean_fa') , demogpym, exclusions=c("hier_id",'background','thk','area','vol','motion','FD','dvars','ssnr','tsnr','SNR','evr','mean_md','cnx',comix) )
+mtnm = getNamesFromDataframe( c("mtl"), demogpym, exclusions=comix )
+cenm = getNamesFromDataframe( c("cerebellum"), demogpym, exclusions=c('_cerebellum',comix, 'thk' ))
+cinm = getNamesFromDataframe( c("deep_cit"), demogpym, exclusions=c('_cerebellum',comix,'thk'))
+t1hn = getNamesFromDataframe( c("dktcortex"), demogpym, exclusions=c('_cerebellum',comix ) )
+t1hn = unique( intersect( c( t1hn, mtnm, cenm, cinm ), colnames(demogpym ) ) )
+xcl=c("_sd","_mean","FD",'motion','dvar')
+# rsnm = getNamesFromDataframe( c("2_DefaultMode"), demogpym, exclusions=xcl  )
+# rsnm = getNamesFromDataframe( c("rsfMRI_fcnxpro100DefaultMode_2_"), demogpym, exclusions=xcl  )
+rsnm = getNamesFromDataframe( c("rsfMRI","_2_"), demogpym, exclusions=xcl  )
+if ( eval_rsf_mod == 'falff' ) 
+  rsnm = getNamesFromDataframe( c("rsfMRI","_falff"), demogpym, exclusions=xcl  )
+if ( eval_rsf_mod == 'alff' ) 
+  rsnm = getNamesFromDataframe( c("rsfMRI","_alff"), demogpym, exclusions=xcl  )
+demogpym$globalmeanrsf = rowMeans(demogpym[,rsnm] )
+demogpym$globalsdrsf = apply(demogpym[,rsnm], FUN=sd, MARGIN=1, na.rm=FALSE)
+# demogpym[,rsnm] = ( demogpym[,rsnm] - demogpym$globalmeanrsf ) # / demogpym$globalsdrsf
+# demogpym[,rsnm] = demogpym[,rsnm] / demogpym$T1Hier_BV
+if ( ! exists("authname") ) authname='BA'
+if ( authname == 'BA' ) {
+  pfnm = getNamesFromDataframe( c("perf_cbf_mean"), demogpym,  exclusions=c('_cerebellum',comix ) )
+} else {
+  pfnm = getNamesFromDataframe( c("CBF"), demogpym, exclusions=c("Vermis","Cerebel") ) # JJ
+}
+demogpym[haveAllMerge,pfnm]=demogpym[haveAllMerge,pfnm]/demogpym$perf_gm_mean_cbf
+# derka
+# demogpym[haveAllMerge,rsnm]=demogpym[haveAllMerge,rsnm] /demogpym$globalmeanrsf[haveAllMerge]
+mats = list(
+    t1=demogpym[haveAllMerge & demogpym$isBaseline,t1hn], 
+    rs=antsrimpute(demogpym[haveAllMerge & demogpym$isBaseline,rsnm]),
+#    pf=antsrimpute(demogpym[haveAllMerge& demogpym$isBaseline ,pfnm]),
+    fa=demogpym[haveAllMerge& demogpym$isBaseline,fanm] )
+matsFull = list( 
+    t1=demogpym[haveAllMerge,t1hn], 
+    rs=antsrimpute(demogpym[haveAllMerge,rsnm]),
+#    pf=antsrimpute(demogpym[haveAllMerge,pfnm]),
+    fa=demogpym[haveAllMerge,fanm] )
+nms = names(mats)
+regs = list()
+for ( x in 1:length(mats)) {
+    mats[[x]]=scale(mats[[x]],T,T)
+#    mats[[x]]=data.matrix(mats[[x]])
+    mycor = cor( mats[[x]] )
+    mycor[mycor < 0.8]=0
+    regs[[x]]=mycor
+}
+# regs = regularizeSimlr( mats, fraction=0.1, sigma=rep(1.0,length(mats)) )
+```
+
+
+## SiMLR
+
+We first collected only subjects that have all modalities.  now we run simlr.
+
+```{r dosimlr,echo=FALSE}
+# res.pca <- PCA(cbind(mats[[1]],mats[[2]],mats[[3]],mats[[4]]),  graph = FALSE)
+# fviz_screeplot(res.pca, addlabels = TRUE, ylim = c(0, 14), ncp=mymin)
+# derka
+mymin = 10# round(min( dim(mats[[1]])) * 0.9)
+nperms = 0
+myseeds = sample(1:10000,nperms)
+simlrpermvarxall = data.frame()
+################### simlr parameters etc ###################
+if ( ! exists( "nsimlrsearch") ) nsimlrsearch = 2
+for ( nsimlr in nsimlrsearch) {
+        myjr = TRUE
+        prescaling = c(  'sqrtnp'  )
+        prescaling = c( 'center', 'np' )
+        prescaling = c( 'robust', 'np'  )
+        prescaling = c( 'centerAndScale', 'np' )
+        optimus = 'lineSearch'
+        maxits = 100
+        ebber = 0.99
+        pizzer = rep( "positive", length(mats) )
+        objectiver='cca';        mixer = 'pca'
+        objectiver='regression';        mixer = 'ica'
+        sparval = rep( 0.80, length( mats ))
+        initu = initializeSimlr(
+                    mats,
+                    nsimlr,
+                    jointReduction = myjr,
+                    zeroUpper = FALSE,
+                    uAlgorithm = "pca",
+                    addNoise = 0 )
+        simlrX = simlr( mats, 
+                        regs, 
+                        iterations=maxits, 
+                        verbose=TRUE,
+                        randomSeed = myseed,
+                        mixAlg=mixer,
+                        energyType=objectiver,
+                        scale = prescaling,
+                        sparsenessQuantiles=sparval,
+                        expBeta = ebber,
+                        positivities = pizzer, 
+                        optimizationStyle=optimus,
+                        initialUMatrix=initu )
+                refvarxmeans = matrix(nrow=length(mats),ncol=length(mats))
+                refvarxmeansnms = matrix("",nrow=length(mats),ncol=length(mats))
+                nmats = 1:length(mats)
+                for ( kk in nmats ) {
+                    rownames(simlrX$v[[kk]])=colnames(matsFull[[kk]])
+                    temp = predictSimlr( mats, simlrX, targetMatrix=kk, 
+                                    sourceMatrices=nmats[nmats!=kk] )
+                    temp = unlist( lapply( temp$varxfull, FUN=mean ) )
+                    refvarxmeans[kk,nmats[nmats!=kk]]=temp
+                    refvarxmeansnms[kk,nmats[nmats!=kk]]=paste0(nms[kk],"_",paste0(nms[nmats!=kk]))
+                    }
+                refvarxmeans = c( refvarxmeans[upper.tri(refvarxmeans)], refvarxmeans[lower.tri(refvarxmeans)])
+                refvarxmeansnms = c( refvarxmeansnms[upper.tri(refvarxmeansnms)], refvarxmeansnms[lower.tri(refvarxmeansnms)])
+                simlrpermvarx = data.frame( perm=0:nperms ) 
+                simlrpermvarx[1, refvarxmeansnms]=refvarxmeans
+                # begin permutation
+                if ( nperms > 0 ) {
+                for ( nperm in c(1:nperms) ) {
+                    set.seed( myseeds[nperm] )
+                    matsperm = mats
+                    for ( jj in 1:length(mats) ) {
+                        myperm = sample( as.integer( 1:nrow(mats[[jj]])) )
+                        matsperm[[jj]]=mats[[jj]][myperm,]
+                    }
+                    initu = initializeSimlr(
+                        matsperm,
+                        nsimlr,
+                        jointReduction = myjr,
+                        zeroUpper = FALSE,
+                        uAlgorithm = "pca",
+                        addNoise = 0 )
+                    simlrXperm = simlr( matsperm, 
+                        regs, 
+                        iterations=maxits, 
+                        verbose=FALSE,
+                        randomSeed = myseed,
+                        mixAlg=mixer,
+                        energyType=objectiver,
+                        scale = prescaling,
+                        sparsenessQuantiles=sparval,
+                        expBeta = ebber,
+                        positivities = pizzer, 
+                        optimizationStyle=optimus,
+                        initialUMatrix=initu )
+                    refvarxmeansp = matrix(nrow=length(mats),ncol=length(mats))
+                    nmats = 1:length(mats)
+                    for ( kk in nmats ) {
+                        temp = predictSimlr( matsperm, simlrXperm, targetMatrix=kk, 
+                                        sourceMatrices=nmats[nmats!=kk] )
+                        temp = unlist( lapply( temp$varxfull, FUN=mean ) )
+                        refvarxmeansp[kk,nmats[nmats!=kk]]=temp
+                        }
+                    refvarxmeansp = c( refvarxmeansp[upper.tri(refvarxmeansp)], refvarxmeansp[lower.tri(refvarxmeansp)])
+                    ww = which( simlrpermvarx$perm == nperm )
+                    simlrpermvarx[ww, refvarxmeansnms]=refvarxmeansp
+                    set.seed( myseeds[nperm] )
+                    print( simlrpermvarx[c(1,ww),])
+                }
+            }
+if ( nperms > 0 ) {
+    nexter=nrow(simlrpermvarx)+1
+    simlrpermvarx[nexter,'perm']='ttest'
+    for ( jj in refvarxmeansnms ) {
+        mytt = t.test( simlrpermvarx[1,jj] - simlrpermvarx[-1,jj] )
+        simlrpermvarx[nexter,jj] = mytt$p.value
+    }
+    simlrpermvarx$n = nsimlr
+    simlrpermvarxall = rbind( simlrpermvarxall, simlrpermvarx )
+#    write.csv( simlrpermvarxall, simlrpvaluefn, row.names=FALSE )
+  }
+  print( simlrpermvarxall[ simlrpermvarxall$perm == 'ttest',] )
+}
+
+#################
+nms = names( simlrX$v ) = names(mats)
+simmat = data.matrix(matsFull[[1]] )%*% abs( simlrX$v[[1]] )
+colnames( simmat ) = paste0(nms[1],colnames( simmat ),"_x")
+for ( j in 2:length(mats)) {
+# for ( j in c(2,4)) {
+    temp = data.matrix(matsFull[[j]] ) %*% abs( simlrX$v[[j]] )
+    colnames( temp ) = paste0(nms[j],colnames( temp ),"_x")
+    simmat = cbind( simmat, temp )
+}
+demogsim = cbind( demogpym[haveAllMerge,], simmat )
+nsim = ncol( simlrX$v[[1]] )
+
+```
+
+
+## brain age tests
+
+```{r brainAge}
+pcnames = getNamesFromDataframe( "PC", demogsim )
+# pcnames = pcnames[ -grep("C3",pcnames)]
+pcnames = pcnames[ grep("PC1_x",pcnames)]
+vois = c( "Teen.Ladder.Community.Score",
+ 'Teen.Ladder.SES.score', 'FullScaleIQ', 'Verbal.IQ', 'AgeAtScan', "Income" )
+for ( voi in vois ) {
+  bform = paste( voi, ' ~   AgeAtScan + Sex ' )
+  if ( voi == "AgeAtScan" ) bform = paste( voi, ' ~   Sex ' )
+  fform = paste( bform, "+", paste(pcnames,collapse='+'))
+  nna = !is.na( demogsim[,voi])
+  if ( voi == 'FullScaleIQ' ) {
+    nna = subtyper::fs( !is.na( demogsim[,voi]) & demogsim[,voi] < 180 )
+    }
+  temp = demogsim[nna,]
+  m1 = lm( bform, data =  temp) # base model
+  m2 = lm( fform, data = temp ) # simlr model
+  print( anova(m1,m2) )
+  print( summary(m2) )
+  print(mean(abs( demogsim[nna,voi] - predict(m1))))
+  print(mean(abs( demogsim[nna,voi] - predict(m2))))
+  #visreg::visreg(m2)
+}
+```
+
+
+# Joint modeling: Thickness, resting state, FA $+$ CBF predicting age
+
+
+First, organize the data that we need into a single data frame
+and define train/test groups.
+We will evaluate - using a 50/50 data split - the age prediction error based on
+these 3 modalities.
+
+
+
+## Let's do some prediction
+
+Use random forests to decide how relevant each
+modality and embedding is to predictions of age.
+
+Also report the mean absolute error in age prediction as is standard in brain age.
+The values below are in years.  Generally, for this narrow age range, one to two
+years error is expected.  Our prior PTBP and eigenanatomy
+publications provide some guidance on this.
+
+First get the data organized.
+
+## Build the RF model
+
+In general, one should run several iterations of the below calculations in order
+to better understand the distribution of results.  However, this gives the
+basic idea.
+
+```{r rfpred,echo=FALSE,fig.height=6,fig.width=6}
+pcnames = c( getNamesFromDataframe( c("PC","_x"), demogsim ) )
+if ( ! exists( "tvar" ) ) {
+#  tvar = 'Income'
+#  tvar = 'Verbal.IQ'
+  tvar = 'FullScaleIQ'
+  tvar = "AgeAtScan"
+  tvar = 'Teen.Ladder.Community.Score'
+}
+voi = tvar
+nna = !is.na( demogsim[,voi]) & demogsim$isBaseline
+alldf = demogsim[nna, c( voi,pcnames)]
+alldf[ , c( voi,pcnames) ] = antsrimpute( alldf[ , c( voi,pcnames) ] )
+maxg=8
+groups <- rep( c(1:maxg), 1000 )[1:nrow(alldf)] # 50-50 split
+predAgeAll = rep( NA, nrow( alldf ) )
+for ( myg in 1:maxg ) {
+  traing=groups != myg
+  testg=!traing
+  mdl=randomForest( as.formula(paste0( voi, " ~ . " )), data=alldf[traing,], localImp = TRUE )
+  predage = predict( mdl, newdata=alldf[ testg, ] )
+  predAgeAll[ testg  ] = predage
+}
+#####
+cverr = comma( mean( abs(predAgeAll - alldf[,voi] ) ), digits=2 )
+ttl=( paste( "k-fold CV ", voi, " error:", cverr, authname ))
+temp=data.frame(predage=predAgeAll,realage=alldf[,voi] )
+vmdl=lm( predage~realage,data=temp)
+visreg::visreg(vmdl,main=ttl)
+```
+
+## RF importance plot
+
+The random forest importance plot sheds light on which variables are most
+relevant in the RF decision tree.
+
+```{r rfimp,echo=FALSE}
+importance_frame <- measure_importance( mdl )
+plot_multi_way_importance( importance_frame,  size_measure = "p_value" )
+# impdf=data.frame(
+#  predNames=colnames(alldf)[ rev(order(mdl$importance)) ],
+#  importance=mdl$importance[ rev(order(mdl$importance)) ]
+#  )
+# knitr::kable(  impdf )
+```
+
+
+## more general ML tests
+
+Evaluate several different learners.
+
+```{r mlr3regression,echo=FALSE,eval=TRUE,fig.width=10,fig.height=5,warning=FALSE,message=FALSE}
+library( mlr3verse )
+library( mlr3extralearners )
+myl = list_mlr3learners(select = c("id", "required_packages"))
+myl = myl[ -grep("RWeka",myl$required_packages), ]
+tcols = c( tvar, pcnames )
+myform = as.formula(paste( tvar, " ~ . " ))
+mylcl = myl$id[ grep("regr[.]", myl$id)]
+badones = c( "regr.catboost" , "regr.lmer", "regr.mob", "regr.priority_lasso", "regr.bart", "regr.gam", "regr.km" , "regr.nnet")
+badones = paste0( "regr.", c("bart", 'catboost','gam','km','nnet','lmer','mob','priority_lasso') )
+cvreg = rsmp("cv", folds = maxg )
+
+# mylcl = myl2$key[ grep("regr", myl2$task_type)]
+mylearners = mylcl[ !(mylcl %in% badones) ]
+goodlearners=c("regr.abess", 
+    # "regr.cforest", # slow
+    "regr.ctree", "regr.cubist", "regr.cv_glmnet", 
+    "regr.debug", "regr.earth", "regr.featureless", "regr.fnn", 
+    # "regr.gausspr",  # no generic function found for 'predict'
+    "regr.gbm", "regr.glmboost", "regr.gamboost", "regr.kknn", "regr.ksvm", "regr.liblinear", "regr.lightgbm", 
+#    "regr.randomForest", # slow but good
+   "regr.ranger", 
+#   "regr.rfsrc", # slow
+   "regr.rpart", 
+   # "regr.rvm", # no generic function found for 'predict'
+   "regr.svm" )
+   # "regr.xgboost")
+
+ptbpmlr_regrs = as_task_regr( myform, data = alldf)
+design = benchmark_grid(
+  ptbpmlr_regrs,
+  lrns(goodlearners,predict_sets = c("train", "test")),
+  cvreg
+)
+bmr = benchmark(design)
+
+measures = list(
+  msr("regr.mae", id = "test")
+)
+myMLtab = bmr$aggregate(measures)
+print(myMLtab[, .(task_id, learner_id, test)])
+# goodlearners = unique( tab$learner_id[ tab$test < 5 ] )
+print( autoplot(bmr, measure = msr("regr.mae")) + ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) + 
+  ggtitle( paste("MAE:",voi)) )
+
+# bma = as.BenchmarkAggr(bmr, measures = msr("regr.mae"))
+# bma$friedman_posthoc()
+
+```
+
+## GLMBOOST interpretation
+
+```{r varimpglmboost,echo=FALSE,eval=TRUE,fig.width=8,fig.height=8}
+# Variable importance
+library(mboost)
+model = glmboost( myform, data = alldf )
+importance <- varimp(model)
+plot(importance)
+myimpdfglmboost=data.frame(importance)[ , c("variable","selfreq","reduction")]
+#
+# Assuming 'x1' is a variable of interest
+# pd <- plot(mboost:::partial(model, variable = "faPC1_x"))
+# plot(pd)
+#
+```
+
+## ABESS interpretation
+
+Repeat the study on all the data with ABESS for interpretation's sake.
+
+
+```{r abess,echo=FALSE,fig.width=10,fig.height=5}
+library( abess )
+abess_fit <- abess( myform, data = alldf )
+best_size <- abess_fit[["best.size"]]
+plot(abess_fit, label = TRUE)
+plot(abess_fit, type = "tune")
+# best_model <- extract(abess_fit)
+# best_vars <- best_model[["support.vars"]]
+# print( best_vars )
+
+```
+
+# Discussion
+
+* Reviewed how to set up simlr for imaging studies including regularization
+and parameter setting.
+
+* Compared these methods to traditional dimensionality reduction tools for neuroimaging
+
+* We showed strategies for using these modalities together to find meaningful predictors.
+
+* Performed some visualization and interpretation.
+
+
+
+
+## global means as in PTBP paper 
+
+
+note: PTBP processing adjust CBF T1 for age so is (by definition) a better predictor of age than what we use here ( a constant T1 value for all images )
+
+```{r globalmeanfa,echo=FALSE,eval=FALSE,fig.width=6,fig.height=3.5}
+globalmeanfa = rowMeans( demogsim[,getNamesFromDataframe("mean_fa",demogsim)])
+demogsim$globalmeanfa=globalmeanfa
+isbl=demogsim$isBaseline
+mdl0=lm( globalmeanfa ~ AgeAtScan * Sex  + I(AgeAtScan^2) * Sex + T1Hier_BV, data=demogsim[isbl,] )
+mdl1=lm( globalmeanfa ~ AgeAtScan * Sex  + I(AgeAtScan^2) * Sex + T1Hier_BV, data=demogsim )
+mdl0b=lm( globalmeanfa ~ stats::poly(AgeAtScan,2) * Sex + T1Hier_BV, data=demogsim[isbl,] )
+mdl1b=lm( globalmeanfa ~ AgeAtScan * Sex  + I(AgeAtScan^2) * Sex + T1Hier_BV, data=demogsim )
+print( paste( "FA", rsq(mdl0), rsq(mdl1), rsq(mdl0b), rsq(mdl1b) ))
+
+
+globalmeanfa = rowMeans( demogsim[,getNamesFromDataframe(c("thk","dktcortex"),demogsim)])
+demogsim$globalmeanthk=globalmeanfa
+isbl=demogsim$isBaseline
+mdl0=lm( globalmeanthk ~ AgeAtScan * Sex  + I(AgeAtScan^2) * Sex + T1Hier_BV, data=demogsim[isbl,] )
+mdl1=lm( globalmeanthk ~ AgeAtScan * Sex  + I(AgeAtScan^2) * Sex + T1Hier_BV, data=demogsim )
+mdl0b=lm( globalmeanthk ~ stats::poly(AgeAtScan,2) * Sex + T1Hier_BV, data=demogsim[isbl,] )
+mdl1b=lm( globalmeanthk ~ AgeAtScan * Sex  + I(AgeAtScan^2) * Sex + T1Hier_BV, data=demogsim )
+print( paste( "THK", rsq(mdl0), rsq(mdl1), rsq(mdl0b), rsq(mdl1b) ))
+
+globalmeanfa = rowMeans( demogsim[,getNamesFromDataframe(c("perf_cbf_mean"),demogsim)])
+demogsim$globalmeancbf=globalmeanfa
+isbl=demogsim$isBaseline
+mdl0=lm( globalmeancbf ~ AgeAtScan * Sex  + I(AgeAtScan^2) * Sex + T1Hier_BV, data=demogsim[isbl,] )
+mdl1=lm( globalmeancbf ~ AgeAtScan * Sex  + I(AgeAtScan^2) * Sex + T1Hier_BV, data=demogsim )
+mdl0b=lm( globalmeancbf ~ stats::poly(AgeAtScan,2) * Sex + T1Hier_BV, data=demogsim[isbl,] )
+mdl1b=lm( globalmeancbf ~ AgeAtScan * Sex  + I(AgeAtScan^2) * Sex + T1Hier_BV, data=demogsim )
+print( paste( "CBF", rsq(mdl0), rsq(mdl1), rsq(mdl0b), rsq(mdl1b) ))
+
+tempnames = getNamesFromDataframe(c("rsfMRI","Default"),demogsim)
+globalmeanfa = rowMeans( demogsim[,tempnames])
+demogsim$globalmeanrsf=globalmeanfa
+tem=demogsim[isbl,]
+mdlall=lm( AgeAtScan ~ (globalmeanrsf+globalmeancbf+globalmeanthk+globalmeanfa) + Sex, data=tem )
+summary( mdlall )
+visreg::visreg( mdlall, 'globalmeanthk', by="Sex")
+visreg::visreg( mdlall, 'globalmeanfa', by="Sex")
+visreg::visreg( mdlall, 'globalmeancbf', by="Sex")
+```
