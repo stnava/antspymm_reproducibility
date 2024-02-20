@@ -161,7 +161,7 @@ if ( ! exists("dd") ) {
 ```{r readall3b,echo=FALSE}
 myoc = "rsfMRI_DefaultMode_2_DefaultMode"
 myoc = 'T1Hier_thk_left_superior_frontaldktcortex'
-myoc = "rsfMRI_fcnxpro128_DefaultMode_2_DefaultMode"
+myoc = "rsfMRI_fcnxpro122_DefaultMode_2_DefaultMode"
 dd$outcome = dd[,myoc]
 # quick look at longitudinal distribution
 mdlSite = lm( T1Hier_resnetGrade ~( Site  ) + 1, data=dd )
@@ -260,12 +260,14 @@ t1names = c(
   getNamesFromDataframe( c("T1Hier_",'pons','vol'), dd )
 )
 rsnames = getNamesFromDataframe( c("rsfMRI"), dd, exclusions=c('_alff','_falff','snr','evr','FD','dvars') )
-rsnames = getNamesFromDataframe( c("rsfMRI",'_2_','efault','fcnxpro128'), dd, exclusions=c('snr','evr','FD','dvars') )
+rsnames = getNamesFromDataframe( c("rsfMRI",'_2_','efault','fcnxpro100'), dd, exclusions=c('snr','evr','FD','dvars','_cn','motion','outlier') )
+rsnames = getNamesFromDataframe( c("rsfMRI",'_2_','efault','fcnxpro122'), dd, exclusions=c('snr','evr','FD','dvars','_cn','motion','outlier') )
+# rsnames = getNamesFromDataframe( c("rsfMRI",'_alff','fcnxpro122'), dd, exclusions=c('snr','evr','FD','dvars','_cn','motion','outlier') )
 # rsnames = getNamesFromDataframe( c("rsfMRI",'_falff'), dd, exclusions=c('snr','evr','FD','dvars') )
 dd$globalmeanrsf = rowMeans(dd[,rsnames] )
 dd$globalsdrsf = apply(dd[,rsnames], FUN=sd, MARGIN=1, na.rm=FALSE)
-# dd[,rsnames] = dd[,rsnames] - dd$globalmeanrsf
-dtnames = c( 
+dd[,rsnames] = dd[,rsnames] - dd$globalmeanrsf
+dtnames = c(
   getNamesFromDataframe( c("DTI_mean_fa"), dd ) )
 dtnames = dtnames[ -grep("could",dtnames)]
 dtnames = dtnames[ -grep("_and_",dtnames)]
@@ -338,6 +340,56 @@ print(  ggpubr::ggbarplot( myiccsp, 'anat', 'icc', color='anat',fill='anat', pal
 
 # mykap = kappam.fleiss( iccdf, detail=TRUE )
 # print( mykap )
+```
+
+
+
+## a special section for discerning the reproducibility among different rsfMRI runs
+
+
+```{r rsfmriruns,fig.width=8,fig.height=8,echo=FALSE,eval=TRUE}
+derka
+library(irr)
+#####################
+#####################
+xcl = c( 'snr','evr','FD','dvars','outlier','minute', 'nc_','despik','motion','ermis','erebel','alff_mean','alff_sd','Unk','Subcortical', 'freq','censor','smoothing') 
+allrsnames_cnx = getNamesFromDataframe( c("rsfMRI_fcnxpro128"), ee, exclusions=c('_alff', '_falff',xcl))
+allrsnames_fal = getNamesFromDataframe( c("rsfMRI_fcnxpro128"), ee, exclusions=c('_alff', '_2_',xcl))
+allrsnames_alf = getNamesFromDataframe( c("rsfMRI_fcnxpro128"), ee, exclusions=c('_falff', '_2_',xcl))
+rsnames2eval = c( allrsnames_cnx, allrsnames_fal, allrsnames_alf )
+n1=length(allrsnames_cnx)
+n2=length(allrsnames_fal)
+n3=length(allrsnames_alf)
+rsnames2evaltypes = c( rep('cnx',n1), rep('flf',n2), rep('alf',n3) )
+myiccsrsf = data.frame( )
+ct=1
+for ( aa in rsnames2eval ) {
+  cat( paste0( round( ct / length(rsnames2eval) * 100), "..." ) )
+  for ( run in 100:177 ) {
+    runname = paste0("rsfMRI_fcnxpro",run)
+    a = gsub( "rsfMRI_fcnxpro128", runname , aa )
+    n = nrow( myiccsrsf) + 1
+    tempicc = icck( ee, a )
+    if ( tempicc > 1 | tempicc < 0 ) tempicc=NA
+    myiccsrsf[n,c("anat",'icc','run','type')]=c(a,tempicc, run, rsnames2evaltypes[ct] )
+    myiccsrsf$icc = as.numeric( myiccsrsf$icc )
+    if ( ct %% 100 == 0 & run == 177 ) {
+      print( aggregate( icc ~ run , data=myiccsrsf, FUN=mean ) )
+      print( print( aggregate( icc ~ type , data=myiccsrsf, FUN=mean ) ) )
+      write.csv(myiccsrsf, paste0(rdir,'data/Joined_iccsrsf.csv'), row.names=FALSE)
+    }
+  }
+  ct = ct + 1
+}
+write.csv(myiccsrsf, paste0(rdir,'data/Joined_iccsrsf.csv'), row.names=FALSE)
+myiccsrsf = myiccsrsf[ !is.na( myiccsrsf$icc ) & myiccsrsf$icc > 0 ,]
+print( aggregate( icc ~ run , data=myiccsrsf, FUN=mean ) )
+print( aggregate( icc ~ run , data=myiccsrsf[myiccsrsf$type=='cnx',], FUN=mean ) )
+print( aggregate( icc ~ type , data=myiccsrsf, FUN=mean ) )
+print( aggregate( icc ~ run + type , data=myiccsrsf, FUN=mean ) )
+myiccsrsf = myiccsrsf[ order( myiccsrsf$icc, decreasing=T ), ]
+print( myiccsrsf )
+
 ```
 
 
