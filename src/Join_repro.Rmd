@@ -139,13 +139,13 @@ if ( ! exists("dd") ) {
 #  dd0 = read.csv( paste0( rdir, "Hawco_rep_comm.csv" ) )
 #  dd1 = read.csv( paste0( rdir, "SRPBS_rep_comm.csv" ) )
 #  dd2 = read.csv( paste0( rdir, "DTI_rep_comm.csv" ) )
-  dd0 = read.csv( paste0( rdir, "/data/Hawco_rep_comm.csv" ) )
-  dd1 = read.csv( paste0( rdir, "/data/SRPBS_rep_comm.csv" ) )
-  dd2 = read.csv( paste0( rdir, "/data/DTI_rep_comm.csv" ) )
+  dd0 = read.csv( paste0( rdir, "/data_yeo/Hawco_rep_comm.csv" ) )
+  dd1 = read.csv( paste0( rdir, "/data_yeo/SRPBS_rep_comm.csv" ) )
+  dd2 = read.csv( paste0( rdir, "/data_yeo/DTI_rep_comm.csv" ) )
   dd0$study='Hawco'
   dd1$study='SRPBS'
   dd2$study='DTI'
-  ccnames = colnames( dd0 )
+  ccnames = colnames( dd0 ) 
   dd1b = dd1[ , intersect( colnames(dd1) , ccnames) ]
   dd2b = dd2[ , intersect( colnames(dd2) , ccnames) ]
   allcom = intersect( ccnames, colnames(dd1))
@@ -162,6 +162,7 @@ if ( ! exists("dd") ) {
 myoc = "rsfMRI_DefaultMode_2_DefaultMode"
 myoc = 'T1Hier_thk_left_superior_frontaldktcortex'
 myoc = "rsfMRI_fcnxpro122_DefaultMode_2_DefaultMode"
+myoc = "rsfMRI_fcnxpro122_DefaultA_2_DefaultA"
 dd$outcome = dd[,myoc]
 # quick look at longitudinal distribution
 mdlSite = lm( T1Hier_resnetGrade ~( Site  ) + 1, data=dd )
@@ -247,21 +248,24 @@ print( reli_aov( "outcome", "Site", "Subject", data=dd ) )
 
 ```{r setitup,echo=FALSE,fig.width=9,fig.height=4.5}
 t1names = c( 
-  getNamesFromDataframe( c("T1Hier_","vol",'dktcortex'), dd ),
-  getNamesFromDataframe( c("T1Hier_","vol",'deep_cit'), dd ),
-  getNamesFromDataframe( c("T1Hier_","thk",'dktcortex'), dd ),
-  getNamesFromDataframe( c("T1Hier_","thk",'deep_cit'), dd ),
-  getNamesFromDataframe( c("T1Hier_",'nbm','vol'), dd ),
-  getNamesFromDataframe( c("T1Hier_",'nbm','thk'), dd ),
-  getNamesFromDataframe( c("T1Hier_",'cerebellum','vol'), dd ),
-  getNamesFromDataframe( c("T1Hier_",'mtl','vol'), dd ),
-  getNamesFromDataframe( c("T1Hier_",'medulla','vol'), dd ),
-  getNamesFromDataframe( c("T1Hier_",'midbrain','vol'), dd ),
-  getNamesFromDataframe( c("T1Hier_",'pons','vol'), dd )
+  getNamesFromDataframe( c("T1Hier_","vol",'dktcortex','left'), dd ),
+  getNamesFromDataframe( c("T1Hier_","vol",'deep_cit','left'), dd ),
+  getNamesFromDataframe( c("T1Hier_","thk",'dktcortex','left'), dd ),
+  getNamesFromDataframe( c("T1Hier_","thk",'deep_cit','left'), dd ),
+  getNamesFromDataframe( c("T1Hier_",'nbm','vol','left'), dd ),
+  getNamesFromDataframe( c("T1Hier_",'nbm','thk','left'), dd ),
+  getNamesFromDataframe( c("T1Hier_",'cerebellum','vol','left'), dd ),
+  getNamesFromDataframe( c("T1Hier_",'mtl','vol','left'), dd ),
+  getNamesFromDataframe( c("T1Hier_",'medulla','vol','left'), dd ),
+  getNamesFromDataframe( c("T1Hier_",'midbrain','vol','left'), dd ),
+  getNamesFromDataframe( c("T1Hier_",'pons','vol','left'), dd )
 )
 rsnames = getNamesFromDataframe( c("rsfMRI"), dd, exclusions=c('_alff','_falff','snr','evr','FD','dvars') )
-rsnames = getNamesFromDataframe( c("rsfMRI",'_2_','efault','fcnxpro100'), dd, exclusions=c('snr','evr','FD','dvars','_cn','motion','outlier') )
-rsnames = getNamesFromDataframe( c("rsfMRI",'_2_','efault','fcnxpro122'), dd, exclusions=c('snr','evr','FD','dvars','_cn','motion','outlier') )
+rsnames0 = getNamesFromDataframe( c("rsfMRI",'fcnxpro122'), dd, exclusions=c('snr','evr','FD','dvars','_cn','motion','outlier','paramset','upsampling','_mean',"_sd") )
+rsnames0 = getNamesFromDataframe( c("rsfMRI",'fcnxpro122','left'), dd, exclusions=c('snr','evr','FD','dvars','_cn','motion','outlier','paramset','upsampling','_mean',"_sd") )
+dd=mapLRAverageVar( dd, unique(rsnames0 ))
+dd=mapLRAverageVar( dd, unique(t1names ))
+rsnames = getNamesFromDataframe( c("rsfMRI",'fcnxpro122'), dd, exclusions=c('snr','evr','FD','dvars','_cn','motion','outlier','paramset','upsampling','_mean',"_sd","left","right") )
 # rsnames = getNamesFromDataframe( c("rsfMRI",'_alff','fcnxpro122'), dd, exclusions=c('snr','evr','FD','dvars','_cn','motion','outlier') )
 # rsnames = getNamesFromDataframe( c("rsfMRI",'_falff'), dd, exclusions=c('snr','evr','FD','dvars') )
 dd$globalmeanrsf = rowMeans(dd[,rsnames] )
@@ -326,7 +330,7 @@ for ( a in sample(allnamesu) ) {
   myiccs[n,c("anat",'icc')]=c(a,tempicc )
 }
 myiccs$icc = as.numeric( myiccs$icc )
-myiccs = myiccs[ !is.na( myiccs$icc ) & myiccs$icc > 0 ,]
+myiccs = myiccs[ !is.na( myiccs$icc ) & myiccs$icc > 0 & myiccs$icc <= 1.0 ,]
 mysam = sample( allnamesu, 6 )
 mysam = myiccs$anat %in% mysam 
 myiccsp = myiccs[mysam,]
@@ -347,15 +351,15 @@ print(  ggpubr::ggbarplot( myiccsp, 'anat', 'icc', color='anat',fill='anat', pal
 ## a special section for discerning the reproducibility among different rsfMRI runs
 
 
-```{r rsfmriruns,fig.width=8,fig.height=8,echo=FALSE,eval=TRUE}
+```{r rsfmriruns,fig.width=8,fig.height=8,echo=FALSE,eval=FALSE}
 derka
 library(irr)
 #####################
 #####################
 xcl = c( 'snr','evr','FD','dvars','outlier','minute', 'nc_','despik','motion','ermis','erebel','alff_mean','alff_sd','Unk','Subcortical', 'freq','censor','smoothing') 
-allrsnames_cnx = getNamesFromDataframe( c("rsfMRI_fcnxpro128"), ee, exclusions=c('_alff', '_falff',xcl))
-allrsnames_fal = getNamesFromDataframe( c("rsfMRI_fcnxpro128"), ee, exclusions=c('_alff', '_2_',xcl))
-allrsnames_alf = getNamesFromDataframe( c("rsfMRI_fcnxpro128"), ee, exclusions=c('_falff', '_2_',xcl))
+allrsnames_cnx = getNamesFromDataframe( c("rsfMRI_fcnxpro122"), ee, exclusions=c('_alff', '_falff',xcl))
+allrsnames_fal = getNamesFromDataframe( c("rsfMRI_fcnxpro122"), ee, exclusions=c('_alff', '_2_',xcl))
+allrsnames_alf = getNamesFromDataframe( c("rsfMRI_fcnxpro122"), ee, exclusions=c('_falff', '_2_',xcl))
 rsnames2eval = c( allrsnames_cnx, allrsnames_fal, allrsnames_alf )
 n1=length(allrsnames_cnx)
 n2=length(allrsnames_fal)
@@ -365,7 +369,7 @@ myiccsrsf = data.frame( )
 ct=1
 for ( aa in rsnames2eval ) {
   cat( paste0( round( ct / length(rsnames2eval) * 100), "..." ) )
-  for ( run in 100:177 ) {
+  for ( run in c(122,128,134) ) {
     runname = paste0("rsfMRI_fcnxpro",run)
     a = gsub( "rsfMRI_fcnxpro128", runname , aa )
     n = nrow( myiccsrsf) + 1
@@ -376,12 +380,12 @@ for ( aa in rsnames2eval ) {
     if ( ct %% 100 == 0 & run == 177 ) {
       print( aggregate( icc ~ run , data=myiccsrsf, FUN=mean ) )
       print( print( aggregate( icc ~ type , data=myiccsrsf, FUN=mean ) ) )
-      write.csv(myiccsrsf, paste0(rdir,'data/Joined_iccsrsf.csv'), row.names=FALSE)
+      write.csv(myiccsrsf, paste0(rdir,'data_yeo/Joined_iccsrsf.csv'), row.names=FALSE)
     }
   }
   ct = ct + 1
 }
-write.csv(myiccsrsf, paste0(rdir,'data/Joined_iccsrsf.csv'), row.names=FALSE)
+write.csv(myiccsrsf, paste0(rdir,'data_yeo/Joined_iccsrsf.csv'), row.names=FALSE)
 myiccsrsf = myiccsrsf[ !is.na( myiccsrsf$icc ) & myiccsrsf$icc > 0 ,]
 print( aggregate( icc ~ run , data=myiccsrsf, FUN=mean ) )
 print( aggregate( icc ~ run , data=myiccsrsf[myiccsrsf$type=='cnx',], FUN=mean ) )
@@ -455,7 +459,7 @@ asel = multigrep( c("cit168","thk"), myiccs$anat, intersect=TRUE )
 myiccs$modality_st[asel]=paste0(myiccs$modality_st[asel],'_cit')
 asel = multigrep( c("jhu","mean_fa"), myiccs$anat, intersect=TRUE )
 myiccs$modality_st[asel]=paste0(myiccs$modality_st[asel],'_fa_jhu')
-asel = multigrep( c("DefaultMode"), myiccs$anat, intersect=TRUE )
+asel = multigrep( c("Default"), myiccs$anat, intersect=TRUE )
 myiccs$modality_st[asel]=paste0(myiccs$modality_st[asel],'_dfn')
 # asel = multigrep( c("MemoryRetrieval"), myiccs$anat, intersect=TRUE )
 # myiccs$modality_st[asel]=paste0(myiccs$modality_st[asel],'_mem')
@@ -466,25 +470,43 @@ myiccs$modality_st[asel]='t1_nbm_mtl'
 asel = myiccs$modality_st=='t1'
 myiccs$modality_st[asel]='t1_nbm_mtl'
 asel = myiccs$modality_st=='DTI'
-myiccs$modality_st[asel]='DTI_gm'
+myiccs$modality_st[asel]='DTI_fa_gm'
 asel = myiccs$modality_st=='rsfMRI_dfn_sub'
 myiccs$modality_st[asel]='rsfMRI_dfn_sub'
 
-asel = multigrep( c("Attention"), myiccs$anat, intersect=TRUE )
+asel = c(
+  multigrep( c("Default","Attn"), myiccs$anat, intersect=TRUE ))
 myiccs$modality_st[asel]='rsfMRI_dfn_att'
-asel = multigrep( c("Task"), myiccs$anat, intersect=TRUE )
+asel = multigrep( c("Default","Cont"), myiccs$anat, intersect=TRUE )
 myiccs$modality_st[asel]='rsfMRI_dfn_tsk'
+
+asel = multigrep( c("peraf"), myiccs$anat, intersect=TRUE )
+myiccs$modality_st[asel]='rsfMRI_peraf'
+
+asel = multigrep( c("_alff"), myiccs$anat, intersect=TRUE )
+myiccs$modality_st[asel]='rsfMRI_alff'
+
+
+asel = multigrep( c("_falff"), myiccs$anat, intersect=TRUE )
+myiccs$modality_st[asel]='rsfMRI_falff'
+
+myiccs[ myiccs$modality_st == 'rsfMRI', 'modality_st'  ]='rsfMRI_cnx'
 
 table(myiccs$modality_st)
 
 ```
 
 
-```{r boxplotroi2,fig.width=12,fig.height=6,echo=FALSE,eval=TRUE}
+```{r boxplotroi2,fig.width=12,fig.height=6,echo=FALSE,eval=TRUE,results='asis'}
 ggpubr::ggboxplot(myiccs, y = "icc", x='modality_st',
    color = "modality", # fill = "anat",
    title='ICC variability by modality for ROI representation',ylim=c(0,1) )+ 
   theme(axis.text.x = element_text(angle = 45, vjust = 0.8, hjust=1))
+
+aggM=aggregate(  icc ~  modality_st , data=myiccs , FUN=mean )
+aggSD=aggregate(  icc ~  modality_st , data=myiccs , FUN=sd )
+aggM$sd=aggSD$icc
+knitr::kable( aggM[ order( aggM$icc, decreasing=T), ] )
 ```
 
 
@@ -547,7 +569,7 @@ myiccsimlr = data.frame()
 rm( initu )
 # for ( siteonwhichtotrain in c(bestsite1,bestsite2,bestsite3,bestsite4) ) {
 hawcosites = table( dd$Site[ dd$study == 'Hawco' ] )
-hawcosites = names( hawcosites[ hawcosites > 1 ])
+hawcosites = names( hawcosites[ hawcosites > 3 ])
 for ( siteonwhichtotrain in hawcosites ) {
   print( paste("USE SITE: ", siteonwhichtotrain ))
   lrt1 = getNamesFromDataframe( c("T1Hier","LRAV"), ee )
@@ -693,7 +715,7 @@ print( ggpubr::ggbarplot( ccdf, 'Koo', 'Freq', color='Koo',fill='Koo', palette=b
 
 ## simple t-test between two representations 
 
-```{r tt,echo=FALSE,eval=TRUE}
+```{r tt,echo=FALSE,eval=FALSE}
 t1sel1=myiccs$modality == 't1'
 t1sel2=myiccsimlr$modality == 't1'
 print("T-test of SiMLR vs ROI representation: T1 IDPs")
@@ -715,7 +737,7 @@ print( t.test( myiccsimlr[rssel2,'icc'], myiccs[rssel1,'icc'],  paired=FALSE ) )
 
 ## Summary tabSimlr vs ROIs: ICC IDP reliability in T1w
 
-```{r boxplotttT1,fig.width=8,fig.height=4,echo=FALSE,eval=TRUE}
+```{r boxplotttT1,fig.width=8,fig.height=4,echo=FALSE,eval=FALSE}
 
 rssel1=myiccs$modality == 't1'
 rssel2=myiccsimlr$modality == 't1' # 
@@ -749,7 +771,7 @@ ggpubr::ggboxplot(temp, y = "icc", x='method',
 
 * ...
 
-```{r boxplotttrsf,fig.width=8,fig.height=4,echo=FALSE,eval=TRUE}
+```{r boxplotttrsf,fig.width=8,fig.height=4,echo=FALSE,eval=FALSE}
 
 rssel1=myiccs$modality == 'rsfMRI'
 rssel2=myiccsimlr$modality == 'rsfMRI' # 
@@ -775,7 +797,7 @@ ggpubr::ggboxplot(temp, y = "icc", x='method',
 
 ## Summary tabSimlr vs ROIs: ICC IDP reliability in DTI
 
-```{r boxplotttDTI,fig.width=8,fig.height=4,echo=FALSE,eval=TRUE}
+```{r boxplotttDTI,fig.width=8,fig.height=4,echo=FALSE,eval=FALSE}
 
 rssel1=myiccs$modality == 'DTI'
 rssel2=myiccsimlr$modality == 'DTI' # 

@@ -11,8 +11,7 @@ output: html_document
 ```{r setup,eval=TRUE,results='hide',warning=FALSE,echo=FALSE}
 # set this for your own compilation
 if ( ! exists("eval_rsf_mod")) eval_rsf_mod = 'cnx'
-bd = path.expand( "~/data/PTBP/" )
-if ( ! dir.exists( bd ) ) bd = "./"
+bd = path.expand("~/code/antspymm_reproducibility/data_yeo/")
 set.seed( 919 )
 library( pander )
 library( ggplot2 )
@@ -27,8 +26,8 @@ library( formattable )
 qth=0.05
 mth='BH'
 if ( ! exists( "apym" ) ) {
-  apym = read.csv( paste0(bd,'ptbp_antspymm.csv'))
-  demog=read.csv(paste(bd,"dataindex/ptbp_summary_demographics.csv",sep='') )
+  apym = read.csv( paste0(bd,'ptbp_antspymm_yeo.csv'))
+  demog=read.csv(paste(bd,"ptbp_summary_demographics.csv",sep='') )
   demog$uid = paste0( demog$SubID, '-', demog$ScanDate )
   demog$uid[ is.na(demog$SubID)]=NA
   apym$uid = paste0( apym$subjectID, '-',  apym$date )
@@ -41,13 +40,13 @@ if ( ! exists( "apym" ) ) {
   demog = demog[ demog$T1Hier_resnetGrade > 1.0, ]
   # PTBP-PEDS086-20110906-perf-000_000-perfusion.png
   # PEDS022-20111216
-  perfsel =  !is.na( demog$perf_gm_mean_cbf ) &
+  perfsel =  !is.na( demog$perf_cbf_gm_mean ) &
   !is.na( demog$CBFMeanFrontal_Mid_L ) & # 
     ! ( demog$uid %in%  c('PEDS050-20110223','PEDS021-20101010','PEDS086-20110906','PEDS022-20111216',  'PEDS071-20110712','PEDS079-20110824', 'PEDS102-20120730') )
-  # subtyper::fs( demog$perf_gm_mean < 0.03 & demog$perf_gm_mean > 0.001 )
+  # subtyper::fs( demog$perf_cbf_gm_mean < 0.03 & demog$perf_cbf_gm_mean > 0.001 )
   cor.test( demog$CBFMeanFrontal_Mid_L[perfsel], demog$AgeAtScan[perfsel] )
   cor.test( demog$perf_cbf_mean_left_superior_frontal[perfsel], demog$AgeAtScan[perfsel] )
-  cor.test( demog$perf_gm_mean_cbf[perfsel], demog$AgeAtScan[perfsel] )
+  cor.test( demog$perf_cbf_gm_mean[perfsel], demog$AgeAtScan[perfsel] )
   ############################################################
   nms = unique( c( getNamesFromDataframe( c('CBF','Frontal'), demog ),
     getNamesFromDataframe(  c('CBF','Temporal'), demog ) ) )
@@ -61,15 +60,15 @@ if ( ! exists( "apym" ) ) {
     !is.na( demog$perf_frontal_temporal_mean ),]
   library(lmerTest)
   mxlcbf = lmer( CBF_Frontal_Temporal_mean ~ (1|SubID) + BV + AgeAtScan + Sex, data=temp )
-  mxlprf = lmer( perf_gm_mean ~ (1|SubID) + BV + AgeAtScan + Sex, data=temp )
+  mxlprf = lmer( perf_cbf_gm_mean ~ (1|SubID) + BV + AgeAtScan + Sex, data=temp )
   rsq( mxlcbf )
   rsq( mxlprf )
   mdlcbf = lm( CBF_Frontal_Temporal_mean ~  1 + AgeAtScan + Sex, data=temp )
-  mdlprf = lm( perf_gm_mean ~ 1 + AgeAtScan + Sex, data=temp )
+  mdlprf = lm( perf_cbf_gm_mean ~ 1 + AgeAtScan + Sex, data=temp )
   summary( mdlcbf )
   summary( mdlprf )
 
-  mdlconv = lm( CBF_Frontal_Temporal_mean ~ perf_gm_mean, data=temp )
+  mdlconv = lm( CBF_Frontal_Temporal_mean ~ perf_cbf_gm_mean, data=temp )
 
   # identify baseline scan
   demog$isBaseline=FALSE
@@ -99,16 +98,19 @@ if ( ! exists( "apym" ) ) {
 if ( !exists("myseed") ) myseed=1
 doasym=FALSE
 demogpym = antspymm_predictors( demog, doasym=doasym )
-rsfxpt = 'rsfMRI_fcnxpro'
-if ( ! exists("xptnum")) rsfxptnum = 100 else rsfxptnum=xptnum
+rsfxpt = 'rsfMRI_fcnxpro122'
+if ( ! exists("xptnum")) rsfxptnum = 122 else rsfxptnum=xptnum
 # exclude all rsfMRI except the experiment of interest
-toexclude = getNamesFromDataframe( rsfxpt, demogpym, exclusions=paste0(rsfxpt,rsfxptnum) )
+toexclude = c( 
+  getNamesFromDataframe( "rsfMRI_fcnxpro129", demogpym ),
+  getNamesFromDataframe( "rsfMRI_fcnxpro134", demogpym )
+  )
 demogpym = demogpym[ , ! (colnames(demogpym) %in% toexclude) ]
 wthk=!is.na( demogpym$T1Hier_resnetGrade )
-wcbf=perfsel & !is.na( demogpym$perf_gm_mean_cbf )
-tstrsfmriname=paste0("rsfMRI_fcnxpro", rsfxptnum, "_DefaultMode_2_DefaultMode")
-tstrsfmriname2=paste0("rsfMRI_fcnxpro", rsfxptnum, "_n_outliers")
-tstrsfmriname3=paste0("rsfMRI_fcnxpro", rsfxptnum, "_minutes_censored_data")
+wcbf=perfsel & !is.na( demogpym$perf_cbf_gm_mean )
+tstrsfmriname=paste0(rsfxpt, "_DefaultA_2_DefaultA")
+tstrsfmriname2=paste0(rsfxpt, "_n_outliers")
+tstrsfmriname3=paste0(rsfxpt, "_minutes_censored_data")
 wrs=!is.na(demogpym[ , tstrsfmriname ] )
 fanm="DTI_mean_fa.body_of_corpus_callosum.jhu_icbm_labels_1mm"
 wfa=subtyper::fs( !is.na(demogpym[,fanm]) & demogpym[,fanm] > 0.45 )
@@ -124,7 +126,7 @@ cenm = getNamesFromDataframe( c("cerebellum"), demogpym, exclusions=c('_cerebell
 cinm = getNamesFromDataframe( c("deep_cit"), demogpym, exclusions=c('_cerebellum',comix,'thk'))
 t1hn = getNamesFromDataframe( c("dktcortex"), demogpym, exclusions=c('_cerebellum',comix ) )
 t1hn = unique( intersect( c( t1hn, mtnm, cenm, cinm ), colnames(demogpym ) ) )
-xcl=c("_sd","_mean","FD",'motion','dvar')
+xcl=c("_sd","_mean","FD",'motion','dvar', 'rsfMRI_fcnxpro129', 'rsfMRI_fcnxpro134')
 # rsnm = getNamesFromDataframe( c("2_DefaultMode"), demogpym, exclusions=xcl  )
 # rsnm = getNamesFromDataframe( c("rsfMRI_fcnxpro100DefaultMode_2_"), demogpym, exclusions=xcl  )
 rsnm = getNamesFromDataframe( c("rsfMRI","_2_"), demogpym, exclusions=xcl  )
@@ -142,29 +144,29 @@ if ( authname == 'BA' ) {
 } else {
   pfnm = getNamesFromDataframe( c("CBF"), demogpym, exclusions=c("Vermis","Cerebel") ) # JJ
 }
-demogpym[haveAllMerge,pfnm]=demogpym[haveAllMerge,pfnm]/demogpym$perf_gm_mean_cbf
+# demogpym[haveAllMerge,pfnm]=demogpym[haveAllMerge,pfnm]/demogpym$perf_cbf_gm_mean
 # derka
 # demogpym[haveAllMerge,rsnm]=demogpym[haveAllMerge,rsnm] /demogpym$globalmeanrsf[haveAllMerge]
 mats = list(
     t1=demogpym[haveAllMerge & demogpym$isBaseline,t1hn], 
     rs=antsrimpute(demogpym[haveAllMerge & demogpym$isBaseline,rsnm]),
-#    pf=antsrimpute(demogpym[haveAllMerge& demogpym$isBaseline ,pfnm]),
+    pf=antsrimpute(demogpym[haveAllMerge& demogpym$isBaseline ,pfnm]),
     fa=demogpym[haveAllMerge& demogpym$isBaseline,fanm] )
 matsFull = list( 
     t1=demogpym[haveAllMerge,t1hn], 
     rs=antsrimpute(demogpym[haveAllMerge,rsnm]),
-#    pf=antsrimpute(demogpym[haveAllMerge,pfnm]),
+    pf=antsrimpute(demogpym[haveAllMerge,pfnm]),
     fa=demogpym[haveAllMerge,fanm] )
 nms = names(mats)
 regs = list()
 for ( x in 1:length(mats)) {
+    mats[[x]]=data.matrix(mats[[x]])
     mats[[x]]=scale(mats[[x]],T,T)
-#    mats[[x]]=data.matrix(mats[[x]])
     mycor = cor( mats[[x]] )
     mycor[mycor < 0.8]=0
     regs[[x]]=mycor
 }
-# regs = regularizeSimlr( mats, fraction=0.1, sigma=rep(1.0,length(mats)) )
+regs = regularizeSimlr( mats, fraction=0.1, sigma=rep(1.20,length(mats)) )
 ```
 
 
@@ -176,7 +178,7 @@ We first collected only subjects that have all modalities.  now we run simlr.
 # res.pca <- PCA(cbind(mats[[1]],mats[[2]],mats[[3]],mats[[4]]),  graph = FALSE)
 # fviz_screeplot(res.pca, addlabels = TRUE, ylim = c(0, 14), ncp=mymin)
 # derka
-mymin = 10# round(min( dim(mats[[1]])) * 0.9)
+mymin = 2# round(min( dim(mats[[1]])) * 0.9)
 nperms = 0
 myseeds = sample(1:10000,nperms)
 simlrpermvarxall = data.frame()
@@ -367,7 +369,7 @@ if ( ! exists( "tvar" ) ) {
 #  tvar = 'Verbal.IQ'
   tvar = 'FullScaleIQ'
   tvar = "AgeAtScan"
-  tvar = 'Teen.Ladder.Community.Score'
+#  tvar = 'Teen.Ladder.Community.Score'
 }
 voi = tvar
 nna = !is.na( demogsim[,voi]) & demogsim$isBaseline

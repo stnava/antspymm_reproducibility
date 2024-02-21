@@ -55,8 +55,8 @@ source("/Users/stnava/code/antspymm_reproducibility/src/icck.R")
 library(ANTsR)
 rdir="/Users/stnava/code/antspymm_reproducibility/"
 if ( ! exists("dd") ) {
-  demog = read.csv(paste0(rdir,"data/dti_travel_participants.csv"))
-  dd = read.csv(paste0(rdir,'data/dti_travel_antspymm.csv'))[,-c(1:2)]
+  demog = read.csv(paste0(rdir,"data_yeo/dti_travel_participants.csv"))
+  dd = read.csv(paste0(rdir,'data_yeo/dti_travel_antspymm_yeo.csv'))[,-c(1:2)]
   names(dd)[3]='Site'
   dd$participant_id = dd$subjectID
   dd = merge( dd, demog, by='participant_id')
@@ -643,5 +643,5 @@ ggpubr::ggboxplot(temp, y = "icc", x='method',
 ### common output 
 
 ```{r comm,echo=FALSE}
-write.csv(ee,  paste0(rdir,'data/DTI_rep_comm.csv'), row.names=FALSE)
+write.csv(ee,  paste0(rdir,'data_yeo/DTI_rep_comm.csv'), row.names=FALSE)
 ```
