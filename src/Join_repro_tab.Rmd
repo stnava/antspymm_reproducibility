@@ -83,7 +83,7 @@ A different guideline is given by Koo and Li (2016):
 
 
 ```{r global options, include=FALSE}
-set.seed(0)
+set.seed( 808 )
 library( knitr )
 library( ANTsR )
 library( ggplot2 )
@@ -188,7 +188,7 @@ if ( ! exists("dd" ) ) {
 library(ztable)
 library(moonBook)
 options( ztable.type="html" )
-tblcols = c(  "study", "age", "sex", 'Site', 'T1Hier_resnetGrade', 'T1Hier_evratio','DTI_dti_FD_mean', 'DTI_dti_tsnr_b0_mean', 'DTI_dti_tsnr_dwi_mean', 'DTI_dti_fa_evr', 'rsfMRI_fcnxpro122_bold_evr', 'rsfMRI_fcnxpro122_FD_mean')
+tblcols = c(  "study", "age", "sex", 'Site', 'T1Hier_resnetGrade', 'T1Hier_evratio','DTI_dti_FD_mean', 'DTI_dti_tsnr_b0_mean', 'DTI_dti_tsnr_dwi_mean', 'DTI_dti_fa_evr', 'rsfMRI_fcnxpro122_bold_evr', 'rsfMRI_fcnxpro122_FD_mean', 'rsfMRI_fcnxpro122_tsnr_mean', 'rsfMRI_fcnxpro122_ssnr_mean')
 joinedem=dd[,tblcols]
 joinedem$sex[ subtyper::fs(joinedem$sex == "MALE")]="M"
 joinedem$sex[ is.na(joinedem$sex)]="M"
@@ -339,15 +339,6 @@ allnames = c( getNamesFromDataframe( "LRAVG", dd ), rsnames )
 allnames = allnames[ -grep("could_",allnames)]
 allnames = allnames[ -grep("include_",allnames)]
 
-mysam = sample( allnames[ -multigrep( c("peraf","alff"), allnames) ], 25 )
-for ( outcome in mysam ) {
-  myrel = reli_stats( outcome, item="Site", id="Subject", data=dd )
-  print( myrel )
-  print( plot( myrel ) + ggtitle( paste( outcome , " : ICC ", myrel$icc[5,'icc'], " : CV ", myrel$cv ) ) +
-    theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) )
-  print( outcome )
-}
-#######
 ```
 
 Site-wise reliability
@@ -367,7 +358,7 @@ allnames=unique(allnames)
 allnamesu = allnames# [ grep("T1Hier_",allnames)]
 # allnamesu = allnames[ grep("rsfMRI",allnames)]
 #####################
-ee = dd
+ee = dd[ dd$Site != 'HKH', ]
 ee$istrain=TRUE
 for ( x in allnamesu ) {
   ee$Site=as.character(ee$Site)
@@ -392,8 +383,21 @@ myiccs = myiccs[ !is.na( myiccs$icc ) & myiccs$icc > 0 & myiccs$icc <= 1.0 ,]
 
 
 
-## a special section for discerning the reproducibility among different rsfMRI runs
+```{r rawviz,echo=FALSE,fig.width=9,fig.height=4.5}
+tempnames = myiccs$anat[ !is.na( myiccs$icc ) ]
+mysam = sample( tempnames[ -multigrep( c("peraf","alff"), tempnames) ], 25 )
+for ( outcome in mysam ) {
+  myrel = reli_stats( outcome, item="Site", id="Subject", data=ee )
+  print( myrel )
+  print( plot( myrel ) + ggtitle( paste( outcome , " : ICC ", myrel$icc[5,'icc'], " : CV ", myrel$cv ) ) +
+    theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) )
+  print( outcome )
+}
+#######
+```
 
+
+## a special section for discerning the reproducibility among different rsfMRI runs
 
 ```{r rsfmriruns,fig.width=8,fig.height=8,echo=FALSE,eval=FALSE}
 derka
@@ -542,11 +546,15 @@ table(myiccs$modality_st)
 
 
 ```{r boxplotroi2,fig.width=12,fig.height=6,echo=FALSE,eval=TRUE,results='asis'}
-
+library( kableExtra )
 aggM=aggregate(  icc ~  modality_st , data=myiccs , FUN=mean )
 aggSD=aggregate(  icc ~  modality_st , data=myiccs , FUN=sd )
 aggM$sd=aggSD$icc
-knitr::kable( aggM[ order( aggM$icc, decreasing=T), ] )
+aggMf = aggM[ order( aggM$icc, decreasing=T), ]
+aggMf$icc = insight::format_value( aggMf$icc, 3 )
+aggMf$sd = insight::format_value( aggMf$sd, 2 )
+knitr::kable( aggMf, caption='Numeric summary mean/sd ICC by type of measurement' )%>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = F)
 
 myiccs$modality_st=factor( myiccs$modality_st, levels=aggM[ order( aggM$icc, decreasing=T), 'modality_st' ] )
 ggpubr::ggboxplot(myiccs, y = "icc", x='modality_st',
