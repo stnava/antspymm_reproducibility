@@ -10,6 +10,14 @@ reproducibility analyses for ANTsPyMM based on traveling subject data.
 
 Each dataset is analyzed by distributed computing with ANTsPyMM as in `src/hawco_processing`.
 
+## summary results doc linked below 
+
+* based on `data_yeo/joined_3_travelers.csv`
+
+* summary [doc here]()
+
+## more comments below 
+
 Test-retest reliability in structural MRI measurements, particularly in T1-weighted (T1w) images, is crucial for ensuring that the observed changes in the brain structure over time are due to actual physiological changes rather than variations in the imaging process itself. This reliability is assessed by conducting multiple scans over a period and comparing the results. Here are key factors and findings related to the test-retest reliability of structural MRI measurements in T1-weighted imaging:
 
 1. **Inherent Stability of MRI Technology**: Modern MRI machines, especially those used in research settings, are designed to provide highly reproducible results. T1-weighted imaging, commonly used for viewing the high-contrast anatomical structures of the brain, generally shows good inherent stability.
