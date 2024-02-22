@@ -14,7 +14,7 @@ Each dataset is analyzed by distributed computing with ANTsPyMM as in `src/hawco
 
 * based on `data_yeo/joined_3_travelers.csv`
 
-* summary [doc here](https://htmlpreview.github.io/?https://raw.githubusercontent.com/stnava/antspymm_reproducibility/main/src/Join_repro_tab.html?token=GHSAT0AAAAAACOGSCCIKAUROGTBO6QESDGYZOXNEBQ)
+* summary [doc here](https://raw.githubusercontent.com/stnava/antspymm_reproducibility/main/src/Join_repro_tab.html?token=GHSAT0AAAAAACOGSCCJZF7XKUBXDH7XNUPQZOXO6LA)
 
 * build with `cd ./data_yeo; rmarkdown::render("../src/Join_repro_tab.Rmd")`
 
