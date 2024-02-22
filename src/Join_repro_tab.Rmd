@@ -61,8 +61,6 @@ These data enable us to investigate the reliability of our imaging-derived pheno
 
 We find that (1) the majority of IDPs show superior reliability and (2) joint reduction of IDPs with SiMLR improves reliability further.  **ANTsPyMM IDPs derived from the same subjects imaged at different sites with MRI from various manufacturers show overall high reliability.**  This provides empirical evidence that multiple modality MRI may be used to derive quantitative phenotypes on which predictive models may be based.  
 
-FIXME - move this statement: Statistical control for site effects should still be applied at the population level.
-
 ## background
 
 ### ICC
@@ -190,19 +188,23 @@ if ( ! exists("dd" ) ) {
 library(ztable)
 library(moonBook)
 options( ztable.type="html" )
-tblcols = c(  "study", "age", "sex", 'Subject',  'Site')
+tblcols = c(  "study", "age", "sex", 'Site', 'T1Hier_resnetGrade', 'T1Hier_evratio','DTI_dti_FD_mean', 'DTI_dti_tsnr_b0_mean', 'DTI_dti_tsnr_dwi_mean', 'DTI_dti_fa_evr', 'rsfMRI_fcnxpro122_bold_evr', 'rsfMRI_fcnxpro122_FD_mean')
 joinedem=dd[,tblcols]
 joinedem$sex[ subtyper::fs(joinedem$sex == "MALE")]="M"
 joinedem$sex[ is.na(joinedem$sex)]="M"
 joinedem$hasDTI=!is.na(dd[,'DTI_dti_FD_mean'])
 joinedem$hasfMRI=!is.na(dd[,'rsfMRI_fcnxpro129_FD_mean'])
-sttbl=ztable(mytable(study~.,data=joinedem,method=3))
+joinedem$DTI_dti_FD_mean = joinedem$DTI_dti_FD_mean/10.
+# sttbl=ztable(mytable(study~.,data=joinedem,method=3))
+# sttbl=ztable(mytable(Site~.,data=joinedem,method=3,catMethod=4))
 ####
 ```
 
 ```{r clusterCharARtbl,eval=TRUE,echo=FALSE,cache=FALSE,results='asis'}
 # Print the ztable object, ensuring it's treated as LaTeX code
-print(sttbl, type = "html",size=4,caption="Table 1. Baseline cohort for subjects with T1w IDPs.",sidewaystable=FALSE)
+# print(sttbl, type = "html",size=4,caption="Table 1. Baseline cohort for subjects with T1w IDPs.",sidewaystable=FALSE)
+
+table1(~ . | Site, data=joinedem, topclass="Rtable1-zebra")
 
 ```
 
@@ -317,7 +319,7 @@ rsnames0 = getNamesFromDataframe( c("rsfMRI",'fcnxpro122'), dd, exclusions=c('sn
 rsnames0 = getNamesFromDataframe( c("rsfMRI",'fcnxpro122','left'), dd, exclusions=c('snr','evr','FD','dvars','_cn','motion','outlier','paramset','upsampling','_mean',"_sd") )
 dd=mapLRAverageVar( dd, unique(rsnames0 ))
 dd=mapLRAverageVar( dd, unique(t1names ))
-rsnames = getNamesFromDataframe( c("rsfMRI",'fcnxpro122'), dd, exclusions=c('snr','evr','FD','dvars','_cn','motion','outlier','paramset','upsampling','_mean',"_sd","left","right") )
+rsnames = getNamesFromDataframe( c("rsfMRI",'fcnxpro122'), dd, exclusions=c('snr','evr','FD','dvars','motion','outlier','paramset','upsampling','_mean',"_sd","left","right",'smoothing', "_nc_", "despiki","bandpass","minutes","censor") )
 # rsnames = getNamesFromDataframe( c("rsfMRI",'_alff','fcnxpro122'), dd, exclusions=c('snr','evr','FD','dvars','_cn','motion','outlier') )
 # rsnames = getNamesFromDataframe( c("rsfMRI",'_falff'), dd, exclusions=c('snr','evr','FD','dvars') )
 dd$globalmeanrsf = rowMeans(dd[,rsnames] )
@@ -378,21 +380,11 @@ options(warn=0)
 myiccs = data.frame( )
 for ( a in sample(allnamesu) ) {
   n = nrow( myiccs) + 1
-  tempicc = icck( ee, a )
+  tempicc = suppressWarnings(icck( ee, a ))
   myiccs[n,c("anat",'icc')]=c(a,tempicc )
 }
 myiccs$icc = as.numeric( myiccs$icc )
 myiccs = myiccs[ !is.na( myiccs$icc ) & myiccs$icc > 0 & myiccs$icc <= 1.0 ,]
-mysam = sample( allnamesu, 6 )
-mysam = myiccs$anat %in% mysam 
-myiccsp = myiccs[mysam,]
-myiccsp$anat = gsub("T1Hier_","",myiccsp$anat)
-myiccsp$anat = gsub("rsfMRI_","",myiccsp$anat)
-myiccsp$anat = gsub("TaskControl","",myiccsp$anat)
-myiccsp$icc = as.numeric( myiccsp$icc )
-myiccsp = myiccsp[ order( myiccsp$icc ), ]
-print( myiccsp )
-print(  ggpubr::ggbarplot( myiccsp, 'anat', 'icc', color='anat',fill='anat', palette=brewpal )+theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1)) )
 
 # mykap = kappam.fleiss( iccdf, detail=TRUE )
 # print( mykap )
@@ -602,3 +594,24 @@ print( ggpubr::ggbarplot( ccdf, 'Koo', 'Freq', color='Koo',fill='Koo', palette=b
 
 ```
 
+
+
+
+
+
+
+## Examples of image variability
+
+### T1w 
+
+![Example T1w variability from 3 different cohorts. Consistency in appearance is relatively high and this is reflected in overall superior ICC; we excluded the limited data available from the SIGNA scanners as they are clear outliers in quality.](/Users/stnava/code/antspymm_reproducibility/data/figs/t1_q_diff.jpg)
+
+
+### BOLD rsfMRI
+
+![Example BOLD rsfMRI variability from 3 different cohorts.  Visually apparent differences in the average BOLD image are likely associated with this modality being associated with overall lower ICC in this traveling cohort study.  It is possible that test-retest reliability would be higher than what is shown here.](/Users/stnava/code/antspymm_reproducibility/data/figs/rsf_q_diff.jpg)
+
+
+### FA from DTI
+
+![Example FA from DTI variability from 2 different cohorts.  Consistency in appearance is relatively high and this is reflected in overall superior ICC.](/Users/stnava/code/antspymm_reproducibility/data/figs/fa_q_diff.jpg)
